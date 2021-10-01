@@ -93,7 +93,7 @@ void OnDumpButton(MainWindowComponent& window)
 	SS::targetSectionInfo = GetSectionInfo(SS::hProcess, SS::targetModule);
 	if (SS::targetSectionInfo) {
 		SS::bSectionInfoGood = true;
-		//SS::VTables = FindAllVTables(SS::targetSectionInfo);
+		SS::VTables = FindAllVTables(SS::targetSectionInfo);
 	}
 }
 

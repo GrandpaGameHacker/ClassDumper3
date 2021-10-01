@@ -30,7 +30,7 @@
     <ClCompile Include="DirectX\ImGuiApp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="RTTI.cpp">
+    <ClCompile Include="RTTI\RTTI.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="GUI\SharedState.cpp">
@@ -46,6 +46,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="flecs\LICENCE">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Memory\Memory.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -68,7 +71,7 @@
     <ClInclude Include="DirectX\ImGuiApp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="RTTI.h">
+    <ClInclude Include="RTTI\RTTI.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="GUI\SharedState.h">
@@ -81,6 +84,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="RTTI\VTables.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Memory\Memory.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

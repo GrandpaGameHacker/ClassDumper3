@@ -25,8 +25,9 @@
     <ClCompile Include="DirectX\ImGuiApp.cpp" />
     <ClCompile Include="flecs\flecs.c" />
     <ClCompile Include="flecs\LICENCE" />
+    <ClCompile Include="Memory\Memory.cpp" />
     <ClCompile Include="Memory\Processes.cpp" />
-    <ClCompile Include="RTTI.cpp" />
+    <ClCompile Include="RTTI\RTTI.cpp" />
     <ClCompile Include="GUI\SharedState.cpp" />
     <ClCompile Include="GUI\WindowSystems.cpp" />
     <ClCompile Include="RTTI\VTables.cpp" />
@@ -38,8 +39,9 @@
     <ClInclude Include="DirectX\custom_config.h" />
     <ClInclude Include="DirectX\ImGuiApp.h" />
     <ClInclude Include="flecs\flecs.h" />
+    <ClInclude Include="Memory\Memory.h" />
     <ClInclude Include="Memory\Processes.h" />
-    <ClInclude Include="RTTI.h" />
+    <ClInclude Include="RTTI\RTTI.h" />
     <ClInclude Include="GUI\SharedState.h" />
     <ClInclude Include="GUI\WindowComponents.h" />
     <ClInclude Include="RTTI\VTables.h" />

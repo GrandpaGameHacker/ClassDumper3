@@ -3,11 +3,19 @@
 
 ClassInspector::ClassInspector()
 {
-	MainWindow* main = IWindow::GetWindow<MainWindow>(EWindowType::MainWindow);
+}
+
+ClassInspector::~ClassInspector()
+{
+}
+
+void ClassInspector::InitializeBindings()
+{
+	std::shared_ptr<MainWindow> main = IWindow::GetWindow<MainWindow>(EWindowType::MainWindow);
 	if (main)
 	{
-		main->OnProcessSelected.BindObject(this, &ClassInspector::OnProcessSelectedDelegate);
-		main->OnClassSelected.BindObject(this, &ClassInspector::OnClassSelectedDelegate);
+		main->OnProcessSelected.BindObject(shared_from_this(), &ClassInspector::OnProcessSelectedDelegate);
+		main->OnClassSelected.BindObject(shared_from_this(), &ClassInspector::OnClassSelectedDelegate);
 	}
 	else
 	{
@@ -16,16 +24,22 @@ ClassInspector::ClassInspector()
 	}
 }
 
-ClassInspector::~ClassInspector()
-{
-}
-
 void ClassInspector::Draw()
 {
-	if (ImGui::Begin("Class Inspector", nullptr, ImGuiWindowFlags_NoCollapse))
+	if (SelectedClass)
 	{
-		ImGui::End();
-	};
+		if (ImGui::Begin("Class Inspector", nullptr, ImGuiWindowFlags_NoCollapse))
+		{
+			ImGui::Text("Name: %s", SelectedClass->Name.c_str());
+			ImGui::Text("CompletObjectLocator: 0x%llX", SelectedClass->CompleteObjectLocator);
+			ImGui::Text("Virtual Function Table: 0x%llX", SelectedClass->VTable);
+			ImGui::Text("Number of Virtual Functions: %d", SelectedClass->Functions.size());
+			ImGui::Text("Number of Base Classes: %d", SelectedClass->Parents.size());
+			ImGui::Text("Number of Interfaces: %d", SelectedClass->Interfaces.size());
+			ImGui::End();
+		};
+	}
+
 }
 
 void ClassInspector::OnProcessSelectedDelegate(std::shared_ptr<TargetProcess> target, std::shared_ptr<RTTI> rtti)

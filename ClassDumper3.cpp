@@ -44,11 +44,12 @@ int ClassDumper3::Run()
 
 void ClassDumper3::Initialize()
 {
-	MainWnd = std::make_shared<MainWindow>();
+	MainWnd = IWindow::Create<MainWindow>();
 	MainWnd->Enable();
 	
-	InspectorWnd = std::make_shared<ClassInspector>();
+	InspectorWnd = IWindow::Create<ClassInspector>();
 	InspectorWnd->Enable();
+	InspectorWnd->InitializeBindings();
 }
 
 void ClassDumper3::CleanExit()
@@ -78,7 +79,7 @@ void ClassDumper3::GUILoop()
 		if (done)
 			break;
 		DXApp.CreateFrame();
-		for (IWindow* window : IWindow::WindowList)
+		for (std::shared_ptr<IWindow> window : IWindow::WindowList)
 		{
 			window->Tick();
 		}

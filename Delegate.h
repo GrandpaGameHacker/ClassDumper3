@@ -23,13 +23,17 @@ public:
 	}
 
 	template <typename ThisClass, typename MemberFunction>
-	Delegate(ThisClass* instance, MemberFunction&& member_function)
+	Delegate(std::shared_ptr<ThisClass> instance, MemberFunction&& member_function)
 	{
 		static_assert(std::is_invocable_v<MemberFunction, ThisClass*, Args...>,
 			"Member function must be invocable with specified arguments");
 		function_ = [instance, member_function](Args... args)
 		{
-			return (instance->*member_function)(std::forward<Args>(args)...);
+			auto ptr = instance.get();
+			if (ptr)
+			{
+				return (ptr->*member_function)(std::forward<Args>(args)...);
+			}
 		};
 	}
 
@@ -60,7 +64,7 @@ public:
 	}
 
 	template <typename ThisClass, typename MemberFunction>
-	void BindObject(ThisClass* instance, MemberFunction&& member_function)
+	void BindObject(std::shared_ptr<ThisClass> instance, MemberFunction&& member_function)
 	{
 		delegates_.emplace_back(instance, std::forward<MemberFunction>(member_function));
 	}

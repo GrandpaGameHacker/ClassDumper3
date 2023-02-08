@@ -28,16 +28,26 @@ void ClassInspector::Draw()
 {
 	if (SelectedClass)
 	{
-		if (ImGui::Begin("Class Inspector", nullptr, ImGuiWindowFlags_NoCollapse))
+		const char* WindowTitle = "Class Inspector###";
+		
+		if (SelectedClass->bInterface)
 		{
-			ImGui::Text("Name: %s", SelectedClass->Name.c_str());
-			ImGui::Text("CompletObjectLocator: 0x%llX", SelectedClass->CompleteObjectLocator);
-			ImGui::Text("Virtual Function Table: 0x%llX", SelectedClass->VTable);
-			ImGui::Text("Number of Virtual Functions: %d", SelectedClass->Functions.size());
-			ImGui::Text("Number of Base Classes: %d", SelectedClass->Parents.size());
-			ImGui::Text("Number of Interfaces: %d", SelectedClass->Interfaces.size());
-			ImGui::End();
-		};
+			WindowTitle = "Interface Inspector###";
+		}
+		else if (SelectedClass->bStruct)
+		{
+			WindowTitle = "Structure Inspector###";
+		}
+		ImGui::Begin(WindowTitle, nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
+		
+		ImGui::Text("Name: %s", SelectedClass->Name.c_str());
+		ImGui::Text("CompletObjectLocator: 0x%llX", SelectedClass->CompleteObjectLocator);
+		ImGui::Text("Virtual Function Table: 0x%llX", SelectedClass->VTable);
+		ImGui::Text("Virtual Functions: %d", SelectedClass->Functions.size());
+		ImGui::Text("Inherited: %d", SelectedClass->Parents.size());
+		ImGui::Text("Interfaces: %d", SelectedClass->Interfaces.size());
+		
+		ImGui::End();
 	}
 
 }
@@ -46,11 +56,10 @@ void ClassInspector::OnProcessSelectedDelegate(std::shared_ptr<TargetProcess> ta
 {
 	Target = target;
 	RTTIObserver = rtti;
-	std::cout << "Debug ClassInspector::OnProcessSelectedDelegate called" << std::endl;
 }
 
 void ClassInspector::OnClassSelectedDelegate(std::shared_ptr<_Class> cl)
 {
 	SelectedClass = cl;
-	std::cout << "Debug ClassInspector::OnClassSelectedDelegate called" << std::endl;
+	Enable();
 }

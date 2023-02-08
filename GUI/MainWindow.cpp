@@ -13,32 +13,33 @@ MainWindow::~MainWindow()
 
 void MainWindow::Draw()
 {
-	if (ImGui::Begin("ClassDumper3", nullptr, ImGuiWindowFlags_NoCollapse))
-	{
-		// Exit button
-		if (ImGui::Button("Exit"))
-		{
-			exit(0);
-		}
-		ImGui::Text("Select a process to dump classes from:");
-		ImGui::Separator();
-		DrawProcessList();
-		ImGui::Separator();
-		ImGui::SameLine();
-		if (ImGui::Button("Refresh/Filter"))
-		{
-			RefreshProcessList();
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("Select Process"))
-		{
-			SelectProcess();
-		}
-
-		DrawClassList();
-	}
-	ImGui::End();
+	auto Pos = ImGui::GetMainViewport()->Pos;
+	ImGui::SetNextWindowPos(Pos, ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(300, 300), ImGuiCond_FirstUseEver);
 	
+	ImGui::Begin("ClassDumper3", nullptr, ImGuiWindowFlags_NoCollapse);
+	if (ImGui::Button("Exit"))
+	{
+		exit(0);
+	}
+	ImGui::Text("Select a process to dump classes from:");
+	ImGui::Separator();
+	DrawProcessList();
+	ImGui::Separator();
+	ImGui::SameLine();
+	if (ImGui::Button("Refresh/Filter"))
+	{
+		RefreshProcessList();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Select Process"))
+	{
+		SelectProcess();
+	}
+
+	DrawClassList();
+
+	ImGui::End();
 }
 
 void MainWindow::DrawProcessList()

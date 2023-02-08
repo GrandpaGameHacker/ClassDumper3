@@ -48,7 +48,6 @@ void ClassDumper3::Initialize()
 	MainWnd->Enable();
 	
 	InspectorWnd = IWindow::Create<ClassInspector>();
-	InspectorWnd->Enable();
 	InspectorWnd->InitializeBindings();
 }
 

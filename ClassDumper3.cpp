@@ -1,22 +1,20 @@
 #include "ClassDumper3.h"
-#include "GUI/SharedState.h"
-HWND ClassDumper3::DXWindow;
-WNDCLASSEX ClassDumper3::WindowClass;
-ImGuiApp ClassDumper3::DXApp;
 
-int main(int argc, char* argv[]) {
-	ClassDumper3::AppMain();
-};
-
-void ClassDumper3::AppMain()
+int ClassDumper3::Run()
 {
 	WindowClass = { sizeof(WNDCLASSEX), CS_CLASSDC, DXApp.WndProc, 0L, 0L, NULL, NULL, NULL, NULL, NULL, "ClassDumper2", NULL };
 	RegisterClassEx(&WindowClass);
+	//primary monitor only. Multiple screen support come later
+	int w = GetSystemMetrics(SM_CXSCREEN);
+	int h = GetSystemMetrics(SM_CYSCREEN);
+
+	IWindow::Width = w;
+	IWindow::Height = h;
 
 	DXWindow = CreateWindow(
 		WindowClass.lpszClassName,
-		"ClassDumper 2", WS_OVERLAPPEDWINDOW,
-		100, 100, 1280, 800, NULL, NULL,
+		"ClassDumper 3", WS_OVERLAPPEDWINDOW,
+		0, 0, w, h, NULL, NULL,
 		WindowClass.hInstance, NULL
 	);
 
@@ -24,7 +22,8 @@ void ClassDumper3::AppMain()
 		DXApp.CleanupDeviceD3D();
 		DestroyWindow(DXWindow);
 		UnregisterClass(WindowClass.lpszClassName, WindowClass.hInstance);
-		exit(0);
+		exit(1);
+		return 1;
 	}
 	SetWindowLong(DXWindow, GWL_STYLE, 0);
 	ShowWindow(DXWindow, SW_SHOWMAXIMIZED);
@@ -35,10 +34,60 @@ void ClassDumper3::AppMain()
 	io.IniFilename = NULL;
 	ImGui::StyleColorsDark();
 	DXApp.SetupBackend();
+	
+	Initialize();
+	GUILoop();
+	
+	CleanExit();
+	return 0;
+}
 
-	// do app stuff
-	SS::InitState();
-	SS::ApplicationLoop();
-	// exit
+void ClassDumper3::Initialize()
+{
+	MainWnd = std::make_shared<MainWindow>();
+	MainWnd->Enable();
+	
+	InspectorWnd = std::make_shared<ClassInspector>();
+	InspectorWnd->Enable();
+}
+
+void ClassDumper3::CleanExit()
+{
+	//DXApp.WaitForLastSubmittedFrame();
+	DXApp.ShutdownBackend();
+	DXApp.CleanupDeviceD3D();
+
+	DestroyWindow(DXWindow);
+	UnregisterClass(WindowClass.lpszClassName, WindowClass.hInstance);
 	exit(0);
+}
+
+void ClassDumper3::GUILoop()
+{
+	bool done = false;
+	while (!done)
+	{
+		MSG msg;
+		while (::PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE))
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+			if (msg.message == WM_QUIT)
+				done = true;
+		}
+		if (done)
+			break;
+		DXApp.CreateFrame();
+		for (IWindow* window : IWindow::WindowList)
+		{
+			window->Tick();
+		}
+		DXApp.RenderFrame();
+	}
+}
+
+int main()
+{
+	ClassDumper3 Dumper;
+	Dumper.Run();
 }

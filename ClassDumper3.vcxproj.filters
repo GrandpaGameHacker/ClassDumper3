@@ -3,90 +3,99 @@
   <ItemGroup>
     <Filter Include="Source Files">
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
     <Filter Include="Header Files">
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
     </Filter>
     <Filter Include="Resource Files">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav</Extensions>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="flecs\flecs.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="ClassDumper3.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="DirectX\Backend\imgui_impl_dx12.cpp">
+    <ClCompile Include="gui\helpers\ImGuiApp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="DirectX\Backend\imgui_impl_win32.cpp">
+    <ClCompile Include="gui\helpers\dx11\imgui_impl_dx11.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="DirectX\ImGuiApp.cpp">
+    <ClCompile Include="gui\helpers\dx12\imgui_impl_dx12.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="RTTI\RTTI.cpp">
+    <ClCompile Include="gui\helpers\dx12\imgui_impl_win32.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="GUI\SharedState.cpp">
+    <ClCompile Include="gui\interfaces\IWindow.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="GUI\WindowSystems.cpp">
+    <ClCompile Include="w32\Disassembler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Memory\Processes.cpp">
+    <ClCompile Include="GUI\MainWindow.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="RTTI\VTables.cpp">
+    <ClCompile Include="W32\Memory.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="flecs\LICENCE">
+    <ClCompile Include="W32\RTTI.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Memory\Memory.cpp">
+    <ClCompile Include="GUI\imgui_stl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="GUI\ClassInspector.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="flecs\flecs.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="ClassDumper3.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="DirectX\Backend\imgui_impl_dx12.h">
+    <ClInclude Include="RenderConfig.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="DirectX\Backend\imgui_impl_win32.h">
+    <ClInclude Include="gui\helpers\custom_config.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="DirectX\custom_config.h">
+    <ClInclude Include="gui\helpers\ImGuiApp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="DirectX\ImGuiApp.h">
+    <ClInclude Include="gui\helpers\dx11\imgui_impl_dx11.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="RTTI\RTTI.h">
+    <ClInclude Include="gui\helpers\dx12\imgui_impl_dx12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GUI\SharedState.h">
+    <ClInclude Include="gui\helpers\dx12\imgui_impl_win32.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GUI\WindowComponents.h">
+    <ClInclude Include="gui\interfaces\IWindow.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Memory\Processes.h">
+    <ClInclude Include="w32\Disassembler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="RTTI\VTables.h">
+    <ClInclude Include="w32\Memory.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Memory\Memory.h">
+    <ClInclude Include="GUI\MainWindow.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="W32\RTTI.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GUI\imgui_stl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Delegate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GUI\ClassInspector.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

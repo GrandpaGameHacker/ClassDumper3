@@ -1,5 +1,5 @@
 #include "RTTI.h"
-
+#include "../Util/Strings.h"
 RTTI::RTTI(TargetProcess* process, std::string moduleName)
 {
 	this->process = process;
@@ -358,6 +358,8 @@ void RTTI::EnumerateVirtualFunctions(std::shared_ptr<_Class> c)
 			break;
 		}
 		c->Functions.push_back(buffer[i]);
+		std::string function_name = "sub_" + IntegerToHexStr(buffer[i]);
+		c->FunctionNames.try_emplace(buffer[i], function_name);
 	}
 }
 

@@ -85,15 +85,13 @@ void MainWindow::DrawClassList()
 {
 	if(!RTTIObserver) return;
 	if(!RTTIObserver->GetClasses().size()) return;
-	
-	if (ImGui::BeginChildFrame(1, ImVec2(ImGui::GetWindowHeight(), ImGui::GetWindowWidth())))
+
+	ImGui::BeginChildFrame(1, ImVec2(ImGui::GetWindowWidth() , ImGui::GetWindowHeight()));
+	for (std::shared_ptr<_Class> cl : RTTIObserver->GetClasses())
 	{
-		for (std::shared_ptr<_Class> cl : RTTIObserver->GetClasses())
-		{
-			DrawClass(cl);
-		}
-	ImGui::EndChildFrame();
+		DrawClass(cl);
 	}
+	ImGui::EndChildFrame();
 }
 
 void MainWindow::DrawClass(std::shared_ptr<_Class> cl)

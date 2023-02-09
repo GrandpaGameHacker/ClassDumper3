@@ -7,7 +7,34 @@ enum class EWindowType
 {
 	MainWindow,
 	ClassInspector,
+	RenamePopup,
 	None,
+};
+
+namespace Color
+{
+	constexpr ImVec4 White = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+	constexpr ImVec4 Black = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+	constexpr ImVec4 Red = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+	constexpr ImVec4 Green = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+	constexpr ImVec4 Blue = ImVec4(0.0f, 0.0f, 1.0f, 1.0f);
+	constexpr ImVec4 Yellow = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
+	constexpr ImVec4 Cyan = ImVec4(0.0f, 1.0f, 1.0f, 1.0f);
+	constexpr ImVec4 Magenta = ImVec4(1.0f, 0.0f, 1.0f, 1.0f);
+}
+
+class ScopedColor
+{
+public:
+	ScopedColor(ImGuiCol type, ImVec4 color)
+	{
+		ImGui::PushStyleColor(type, color);
+	}
+
+	~ScopedColor()
+	{
+		ImGui::PopStyleColor();
+	}
 };
 
 class IWindow

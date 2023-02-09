@@ -17,6 +17,7 @@ IWindow::~IWindow() {
         {
             IWindow::WindowList.erase(IWindow::WindowList.begin() + i);
         };
+
     }
 }
 

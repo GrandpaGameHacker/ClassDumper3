@@ -75,17 +75,22 @@ void ClassInspector::Draw()
 
 		{
 			auto color = ScopedColor(ImGuiCol_Text, Color::Green);
+			int index = 0;
 			for (auto& func : SelectedClass->FunctionNames)
 			{
-				std::string function_text = IntegerToHexStr(func.first) + " : " + func.second;
-				ImGui::Text(function_text.c_str());
+				
+				std::string function_text = "%d - " + IntegerToHexStr(func.first) + " : " + func.second;
+				ImGui::Text(function_text.c_str(), index);
 				if (ImGui::IsItemClicked(0))
 				{
 					// insert disassembler tool here
 				}
 				if (ImGui::IsItemClicked(1))
 				{
+					RenameFunction(&func);
 				}
+
+				index++;
 			}
 		}
 		ImGui::End();

@@ -30,6 +30,7 @@ protected:
 	void OnProcessSelectedDelegate(std::shared_ptr<TargetProcess> target, std::shared_ptr<RTTI> rtti);
 	void OnClassSelectedDelegate(std::shared_ptr<_Class> cl);
 	void RenameFunction(std::pair<const uintptr_t, std::string>* func);
+	void CopyInfo();
 	
 	std::shared_ptr<_Class> SelectedClass;
 	std::shared_ptr<TargetProcess> Target;

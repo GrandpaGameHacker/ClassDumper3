@@ -40,11 +40,19 @@ void ClassInspector::Draw()
 		{
 			WindowTitle = "Structure Inspector###";
 		}
+		
 		ImGui::Begin(WindowTitle, nullptr, ImGuiWindowFlags_NoCollapse);
-
+		
+		if (ImGui::Button("Copy To Clipboard"))
+		{
+			CopyInfo();
+		}
+		
+		ImGui::Separator();
 		ImGui::Text("Name: %s", SelectedClass->Name.c_str());
-		ImGui::Text("CompletObjectLocator: 0x%s", IntegerToHexStr(SelectedClass->CompleteObjectLocator).c_str());
-		ImGui::Text("Inherited: %d", SelectedClass->Parents.size());
+
+		ImGui::Text("CompleteObjectLocator: 0x%s", IntegerToHexStr(SelectedClass->CompleteObjectLocator).c_str());
+		ImGui::Text("Num Inherited: %d", SelectedClass->Parents.size());
 		{
 			auto color = ScopedColor(ImGuiCol_Text, Color::Red);
 			for (std::shared_ptr<_ParentClassNode> parent : SelectedClass->Parents)
@@ -53,7 +61,7 @@ void ClassInspector::Draw()
 			}
 		}
 
-		ImGui::Text("Interfaces: %d", SelectedClass->Interfaces.size());
+		ImGui::Text("Num Interfaces: %d", SelectedClass->Interfaces.size());
 		{
 			auto color = ScopedColor(ImGuiCol_Text, Color::Magenta);
 			for (std::shared_ptr<_Class> inter : SelectedClass->Interfaces)
@@ -63,7 +71,7 @@ void ClassInspector::Draw()
 		}
 
 		ImGui::Text("Virtual Function Table: 0x%s", IntegerToHexStr(SelectedClass->VTable).c_str());
-		ImGui::Text("Virtual Functions: %d", SelectedClass->Functions.size());
+		ImGui::Text("Num Virtual Functions: %d", SelectedClass->Functions.size());
 
 		{
 			auto color = ScopedColor(ImGuiCol_Text, Color::Green);
@@ -77,7 +85,6 @@ void ClassInspector::Draw()
 				}
 				if (ImGui::IsItemClicked(1))
 				{
-					RenameFunction(&func);
 				}
 			}
 		}
@@ -108,6 +115,45 @@ void ClassInspector::RenameFunction(std::pair<const uintptr_t, std::string>* fun
 
 	RenamePopupWnd = IWindow::Create<RenamePopup>();
 	RenamePopupWnd->Initialize(func);
+}
+
+void ClassInspector::CopyInfo()
+{
+	// Copy all class info
+	std::string info = "Name: " + SelectedClass->Name + "\n";
+	info += "CompleteObjectLocator: 0x" + IntegerToHexStr(SelectedClass->CompleteObjectLocator) + "\n";
+	info += "Num Inherited: " + std::to_string(SelectedClass->Parents.size()) + "\n";
+	for (std::shared_ptr<_ParentClassNode> parent : SelectedClass->Parents)
+	{
+		info += parent->Name + "\n";
+	}
+	info += "Num Interfaces: " + std::to_string(SelectedClass->Interfaces.size()) + "\n";
+	info += "Virtual Function Table: 0x" + IntegerToHexStr(SelectedClass->VTable) + "\n";
+	info += "Num Virtual Functions: " + std::to_string(SelectedClass->Functions.size()) + "\n";
+	for (auto& func : SelectedClass->FunctionNames)
+	{
+		info += IntegerToHexStr(func.first) + " : " + func.second + "\n";
+	}
+	
+	// Copy to clipboard
+	if (OpenClipboard(nullptr))
+	{
+		EmptyClipboard();
+		HGLOBAL hClipboardData = 0;
+		hClipboardData = GlobalAlloc(GMEM_MOVEABLE, info.size() + 1);
+		if (hClipboardData != 0)
+		{
+			char* pchData;
+			pchData = (char*)GlobalLock(hClipboardData);
+			if (pchData)
+			{
+				strcpy_s(pchData, info.size() + 1, info.c_str());
+				GlobalUnlock(hClipboardData);
+				SetClipboardData(CF_TEXT, hClipboardData);
+			}
+		}
+		CloseClipboard();
+	}
 }
 
 void RenamePopup::Initialize(std::pair<const uintptr_t, std::string>* func)

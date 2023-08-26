@@ -412,7 +412,7 @@ void RTTI::ProcessClasses()
 	}
 }
 
-void RTTI::EnumerateVirtualFunctions(std::shared_ptr<_Class> c)
+void RTTI::EnumerateVirtualFunctions(std::shared_ptr<_Class>& c)
 {
 	constexpr int maxVFuncs = 0x4000;
 	static std::unique_ptr<uintptr_t[]> buffer = std::make_unique<uintptr_t[]>(maxVFuncs);

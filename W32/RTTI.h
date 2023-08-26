@@ -132,7 +132,7 @@ protected:
 	void ProcessClasses();
 
 	// todo: name functions based on what class they are from...
-	void EnumerateVirtualFunctions(std::shared_ptr<_Class> c);
+	void EnumerateVirtualFunctions(std::shared_ptr<_Class>& c);
 
 	std::string DemangleMSVC(char* symbol);
 	void SortClasses();

@@ -7,7 +7,7 @@ RTTI::RTTI(TargetProcess* process, std::string moduleName)
 	this->process = process;
 	module = process->moduleMap.GetModule(moduleName);
 	this->moduleName = moduleName;
-
+	
 	if (process->Is64Bit())
 	{
 		moduleBase = (uintptr_t)module->baseAddress;
@@ -16,13 +16,6 @@ RTTI::RTTI(TargetProcess* process, std::string moduleName)
 	{
 		// dont use the base address as 32 bits uses direct addresses instead of offsets
 		moduleBase = 0;
-	}
-
-	FindValidSections();
-	ScanForClasses();
-	if (PotentialClasses.size() > 0)
-	{
-		ValidateClasses();
 	}
 }
 
@@ -66,8 +59,45 @@ std::vector<std::shared_ptr<_Class>> RTTI::GetClasses()
 	return Classes;
 }
 
+void RTTI::ProcessRTTI()
+{
+	FindValidSections();
+	ScanForClasses();
+	if (PotentialClasses.size() > 0)
+	{
+		ValidateClasses();
+	}
+	bIsProcessing.store(false);
+}
+
+void RTTI::ProcessRTTIAsync()
+{
+	if (bIsProcessing.load() == true) return;
+	bIsProcessing.store(true);
+	ProcessThread = std::thread(&RTTI::ProcessRTTI, this);
+	ProcessThread.detach();
+}
+
+bool RTTI::IsAsyncProcessing()
+{
+	if (!bIsProcessing.load())
+	{
+		return false;
+	}
+
+	return true;
+}
+
+std::string RTTI::GetLoadingStage()
+{
+	std::scoped_lock Lock(LoadingStageMutex);
+	std::string LoadingStageCache = LoadingStage;
+	return LoadingStageCache;
+}
+
 void RTTI::FindValidSections()
 {
+	SetLoadingStage("Finding valid PE sections");
 	bool bFound1 = false;
 	bool bFound2 = false;
 	// find valid executable or read only sections
@@ -89,6 +119,7 @@ void RTTI::FindValidSections()
 	if (!bFound1 || !bFound2)
 	{
 		ClassDumper3::Log("Failed to find valid sections for RTTI scan");
+		SetLoadingStage("Error: Failed to find valid sections for RTTI scan");
 	}
 }
 
@@ -118,6 +149,7 @@ bool RTTI::IsInReadOnlySection(uintptr_t address)
 
 void RTTI::ScanForClasses()
 {
+	SetLoadingStage("Scanning for classes...");
 	uintptr_t* buffer;
 	for (auto& section : ReadOnlySections)
 	{
@@ -155,6 +187,7 @@ void RTTI::ScanForClasses()
 
 void RTTI::ValidateClasses()
 {
+	SetLoadingStage("Validating classes...");
 	bool bUse64bit = process->Is64Bit();
 	for (PotentialClass c : PotentialClasses)
 	{
@@ -204,6 +237,7 @@ void RTTI::ValidateClasses()
 
 void RTTI::ProcessClasses()
 {
+	SetLoadingStage("Processing class data...");
 	std::string LastClassName = "";
 	std::shared_ptr<_Class> LastClass = nullptr;
 	for (PotentialClass c : PotentialClassesFinal)
@@ -274,6 +308,7 @@ void RTTI::ProcessClasses()
 	PotentialClassesFinal.shrink_to_fit();
 
 	// process super classes
+	SetLoadingStage("Processing super class data...");
 	int interfaceCount = 0;
 	for (std::shared_ptr<_Class> c : Classes)
 	{
@@ -396,6 +431,7 @@ std::string RTTI::DemangleMSVC(char* symbol)
 
 void RTTI::SortClasses()
 {
+	SetLoadingStage("Sorting classes...");
 	std::sort(PotentialClassesFinal.begin(), PotentialClassesFinal.end(), [=](PotentialClass a, PotentialClass b)
 		{
 			char aName[bufferSize];
@@ -430,4 +466,10 @@ void RTTI::FilterSymbol(std::string& symbol)
 			symbol.erase(pos, filter.length());
 		}
 	}
+}
+
+void RTTI::SetLoadingStage(std::string stage)
+{
+	std::scoped_lock Lock(LoadingStageMutex);
+	LoadingStage = stage;
 }

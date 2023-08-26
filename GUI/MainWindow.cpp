@@ -1,6 +1,8 @@
 #include "MainWindow.h"
 #include "imgui_stl.h"
+#include "CustomWidgets.h"
 #include <iostream>
+
 MainWindow::MainWindow()
 {
 	processFilter = "ClassDumper3.exe";
@@ -82,6 +84,7 @@ void MainWindow::SelectProcess()
 	if (Target && Target->IsValid())
 	{
 		RTTIObserver = std::make_shared<RTTI>(Target.get(), selectedProcessName);
+		RTTIObserver->ProcessRTTIAsync();
 		OnProcessSelected(Target, RTTIObserver);
 	}
 }
@@ -89,6 +92,14 @@ void MainWindow::SelectProcess()
 void MainWindow::DrawClassList()
 {
 	if(!RTTIObserver) return;
+	if (RTTIObserver->IsAsyncProcessing())
+	{
+		ImGui::Text("Processing...");
+		ImGui::Text("%s", RTTIObserver->GetLoadingStage().c_str());
+		ImGui::Spinner("Spinner", 10, 10, 0xFF0000FF);
+		return;
+	}
+
 	if(!RTTIObserver->GetClasses().size()) return;
 
 	ImGui::BeginChildFrame(1, ImVec2(ImGui::GetWindowWidth() , ImGui::GetWindowHeight()));

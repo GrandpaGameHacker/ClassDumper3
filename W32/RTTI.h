@@ -1,6 +1,6 @@
 #pragma once
 #include "Memory.h"
-
+#include <atomic>
 struct PMD
 {
 	int mdisp = 0; // member displacement
@@ -113,6 +113,14 @@ public:
 	std::vector<std::shared_ptr<_Class>> FindAll(std::string ClassName);
 	std::vector<std::shared_ptr<_Class>> GetClasses();
 
+	void ProcessRTTI();
+	
+	void ProcessRTTIAsync();
+
+	bool IsAsyncProcessing();
+
+	std::string GetLoadingStage();
+
 protected:
 	void FindValidSections();
 	bool IsInExecutableSection(uintptr_t address);
@@ -129,6 +137,17 @@ protected:
 	void SortClasses();
 	void FilterSymbol(std::string& symbol);
 
+	void SetLoadingStage(std::string stage);
+
+	std::atomic_bool bIsProcessing = false;
+	
+	constexpr static size_t LoadingStageSize = 128;
+	
+	std::mutex LoadingStageMutex;
+	std::string LoadingStage = "Not Loading Anything...";
+	std::string LoadingStageCache;
+	
+	std::thread ProcessThread;
 
 	std::string moduleName;
 	Module* module;

@@ -20,7 +20,7 @@ public:
 
 	static void Log(const std::string& InLog);
 	static void Log(const char* InLog);
-	static void LogF(const std::string& Format, ...);
+	static void LogF(std::string Format, ...);
 	static void LogF(const char* Format, ...);
 	static void ClearLog();
 	

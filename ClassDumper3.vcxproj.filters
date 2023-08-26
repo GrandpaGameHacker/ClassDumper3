@@ -110,5 +110,8 @@
     <ClInclude Include="GUI\LogWindow.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="GUI\CustomWidgets.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

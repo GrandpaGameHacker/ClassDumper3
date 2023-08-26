@@ -150,6 +150,7 @@
     <ClInclude Include="ClassDumper3.h" />
     <ClInclude Include="Delegate.h" />
     <ClInclude Include="GUI\ClassInspector.h" />
+    <ClInclude Include="GUI\CustomWidgets.h" />
     <ClInclude Include="gui\helpers\custom_config.h" />
     <ClInclude Include="gui\helpers\dx11\imgui_impl_dx11.h" />
     <ClInclude Include="gui\helpers\dx12\imgui_impl_dx12.h" />

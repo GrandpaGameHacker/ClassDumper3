@@ -103,14 +103,14 @@ void ClassDumper3::Log(const char* InLog)
 	LogWnd->Log(InLog);
 }
 
-void ClassDumper3::LogF(const std::string& Format, ...)
+void ClassDumper3::LogF(std::string Format, ...)
 {
 	if (!LogWnd) return;
 	const char* FormatC = Format.c_str();
 	if (!LogWnd) return;
 
 	va_list Args;
-	va_start(Args, FormatC);
+	va_start(Args, Format);
 
 	char Buffer[4096];
 	vsnprintf_s(Buffer, sizeof(Buffer), FormatC, Args);

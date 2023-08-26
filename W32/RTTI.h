@@ -52,6 +52,7 @@ struct PotentialClass
 {
 	uintptr_t CompleteObjectLocator = 0;
 	uintptr_t VTable = 0;
+	std::string DemangledName;
 };
 
 struct _ParentClassNode;
@@ -109,8 +110,8 @@ class RTTI
 public:
 	RTTI(TargetProcess* process, std::string moduleName);
 	std::shared_ptr<_Class> Find(uintptr_t VTable);
-	std::shared_ptr<_Class> FindFirst(std::string ClassName);
-	std::vector<std::shared_ptr<_Class>> FindAll(std::string ClassName);
+	std::shared_ptr<_Class> FindFirst(const std::string& ClassName);
+	std::vector<std::shared_ptr<_Class>> FindAll(const std::string& ClassName);
 	std::vector<std::shared_ptr<_Class>> GetClasses();
 
 	void ProcessRTTI();
@@ -158,5 +159,6 @@ protected:
 	std::vector<PotentialClass> PotentialClasses;
 	std::vector<PotentialClass> PotentialClassesFinal;
 	std::vector<std::shared_ptr<_Class>> Classes;
-	std::map<uintptr_t, std::shared_ptr<_Class>> ClassMap;
+	std::unordered_map<uintptr_t, std::shared_ptr<_Class>> VTableClassMap;
+	std::unordered_map<std::string, std::shared_ptr<_Class>> NameClassMap;
 };

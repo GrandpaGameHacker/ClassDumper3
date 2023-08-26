@@ -21,36 +21,47 @@ RTTI::RTTI(TargetProcess* process, std::string moduleName)
 
 std::shared_ptr<_Class> RTTI::Find(uintptr_t VTable)
 {
-	auto it = ClassMap.find(VTable);
-	if (it != ClassMap.end())
+	auto it = VTableClassMap.find(VTable);
+	if (it != VTableClassMap.end())
 	{
 		return it->second;
 	}
 	return nullptr;
 }
 
-std::shared_ptr<_Class> RTTI::FindFirst(std::string ClassName)
+std::shared_ptr<_Class> RTTI::FindFirst(const std::string& ClassName)
 {
-	for (std::shared_ptr<_Class> c : Classes)
+	auto it = NameClassMap.find(ClassName);
+	if (it != NameClassMap.end())
 	{
-		if (c->Name.find(ClassName) != std::string::npos)
-		{
-			return c;
-		}
+		return it->second;
 	}
+	
 	return nullptr;
+	
+	// keeping this around just in case I fucked something up with optimizations
+	//for (std::shared_ptr<_Class>& c : Classes)
+	//{
+	//	if (c->Name.find(ClassName) != std::string::npos)
+	//	{
+	//		return c;
+	//	}
+	//}
+	//return nullptr;
 }
 
-std::vector<std::shared_ptr<_Class>> RTTI::FindAll(std::string ClassName)
+std::vector<std::shared_ptr<_Class>> RTTI::FindAll(const std::string& ClassName)
 {
 	std::vector<std::shared_ptr<_Class>> classes;
-	for (std::shared_ptr<_Class> c : Classes)
+
+	for (const auto& entry : NameClassMap)
 	{
-		if (c->Name.find(ClassName) != std::string::npos)
+		if (entry.first.find(ClassName) != std::string::npos)
 		{
-			classes.push_back(c);
+			classes.push_back(entry.second);
 		}
 	}
+
 	return classes;
 }
 
@@ -125,7 +136,7 @@ void RTTI::FindValidSections()
 
 bool RTTI::IsInExecutableSection(uintptr_t address)
 {
-	for (auto& section : ExecutableSections)
+	for (const ModuleSection& section : ExecutableSections)
 	{
 		if (address >= section.start && address <= section.end)
 		{
@@ -137,7 +148,7 @@ bool RTTI::IsInExecutableSection(uintptr_t address)
 
 bool RTTI::IsInReadOnlySection(uintptr_t address)
 {
-	for (auto& section : ReadOnlySections)
+	for (const ModuleSection& section : ReadOnlySections)
 	{
 		if (address >= section.start && address <= section.end)
 		{
@@ -151,16 +162,25 @@ void RTTI::ScanForClasses()
 {
 	SetLoadingStage("Scanning for classes...");
 	uintptr_t* buffer;
-	for (auto& section : ReadOnlySections)
+	size_t sectionSize = 0;
+	size_t max = 0;
+	for (const ModuleSection& section : ReadOnlySections)
 	{
-		buffer = (uintptr_t*)malloc(section.Size());
-		if (buffer == nullptr)
+		sectionSize = section.Size();
+		size_t max = sectionSize / sizeof(uintptr_t);
+		buffer = reinterpret_cast<uintptr_t*>(malloc(sectionSize));
+
+		if (!buffer)
 		{
 			std::cout << "Out of memory: line" << __LINE__;
-			exit(0);
+			exit(-1);
 		}
-		process->Read(section.start, buffer, section.Size());
-		uintptr_t max = section.Size() / sizeof(uintptr_t);
+
+		memset(buffer, 0, sectionSize);
+		
+		process->Read(section.start, buffer, sectionSize);
+
+		
 		for (size_t i = 0; i < max; i++)
 		{
 			if (buffer[i] == 0 || i + 1 > max)
@@ -189,7 +209,7 @@ void RTTI::ValidateClasses()
 {
 	SetLoadingStage("Validating classes...");
 	bool bUse64bit = process->Is64Bit();
-	for (PotentialClass c : PotentialClasses)
+	for (PotentialClass& c : PotentialClasses)
 	{
 		RTTICompleteObjectLocator col;
 		process->Read(c.CompleteObjectLocator, &col, sizeof(RTTICompleteObjectLocator));
@@ -224,6 +244,10 @@ void RTTI::ValidateClasses()
 			continue;
 		}
 
+		char Name[bufferSize];
+		process->Read(pTypeDescriptor + offsetof(RTTITypeDescriptor, name), Name, bufferSize);
+		c.DemangledName = DemangleMSVC(Name);
+
 		PotentialClassesFinal.push_back(c);
 	}
 
@@ -240,7 +264,7 @@ void RTTI::ProcessClasses()
 	SetLoadingStage("Processing class data...");
 	std::string LastClassName = "";
 	std::shared_ptr<_Class> LastClass = nullptr;
-	for (PotentialClass c : PotentialClassesFinal)
+	for (PotentialClass& c : PotentialClassesFinal)
 	{
 		RTTICompleteObjectLocator col;
 		process->Read(c.CompleteObjectLocator, &col, sizeof(RTTICompleteObjectLocator));
@@ -302,15 +326,16 @@ void RTTI::ProcessClasses()
 
 		EnumerateVirtualFunctions(ValidClass);
 		Classes.push_back(ValidClass);
-		ClassMap.insert(std::pair<uintptr_t, std::shared_ptr<_Class>>(ValidClass->VTable, ValidClass));
+		VTableClassMap.insert(std::pair<uintptr_t, std::shared_ptr<_Class>>(ValidClass->VTable, ValidClass));
+		NameClassMap.insert(std::pair<std::string, std::shared_ptr<_Class>>(ValidClass->Name, ValidClass));
 	}
+
 	PotentialClassesFinal.clear();
-	PotentialClassesFinal.shrink_to_fit();
 
 	// process super classes
 	SetLoadingStage("Processing super class data...");
 	int interfaceCount = 0;
-	for (std::shared_ptr<_Class> c : Classes)
+	for (std::shared_ptr<_Class>& c : Classes)
 	{
 		if (c->numBaseClasses > 1)
 		{
@@ -434,18 +459,7 @@ void RTTI::SortClasses()
 	SetLoadingStage("Sorting classes...");
 	std::sort(PotentialClassesFinal.begin(), PotentialClassesFinal.end(), [=](PotentialClass a, PotentialClass b)
 		{
-			char aName[bufferSize];
-			char bName[bufferSize];
-			RTTICompleteObjectLocator col1, col2;
-			process->Read(a.CompleteObjectLocator, &col1, sizeof(RTTICompleteObjectLocator));
-			process->Read(b.CompleteObjectLocator, &col2, sizeof(RTTICompleteObjectLocator));
-			uintptr_t pTypeDescriptor1 = (uintptr_t)col1.pTypeDescriptor + moduleBase;
-			uintptr_t pTypeDescriptor2 = (uintptr_t)col2.pTypeDescriptor + moduleBase;
-			process->Read(pTypeDescriptor1 + offsetof(RTTITypeDescriptor, name), aName, bufferSize);
-			process->Read(pTypeDescriptor2 + offsetof(RTTITypeDescriptor, name), bName, bufferSize);
-			std::string aNameStr = DemangleMSVC(aName);
-			std::string bNameStr = DemangleMSVC(bName);
-			return aNameStr < bNameStr;
+			return a.DemangledName < b.DemangledName;
 		});
 }
 

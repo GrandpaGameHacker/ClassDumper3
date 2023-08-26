@@ -337,12 +337,12 @@ MemoryRange::MemoryRange(uintptr_t start, uintptr_t end, bool bExecutable, bool 
 	this->bWritable = bWritable;
 }
 
-bool MemoryRange::Contains(uintptr_t address)
+bool MemoryRange::Contains(uintptr_t address) const
 {
 	return address >= start && address <= end;
 }
 
-uintptr_t MemoryRange::Size()
+uintptr_t MemoryRange::Size() const
 {
 	return end - start;
 }
@@ -373,12 +373,12 @@ void MemoryMap::Setup(Process* process)
 	ClassDumper3::LogF("Found %u memory regions", ranges.size());
 }
 
-bool ModuleSection::Contains(uintptr_t address)
+bool ModuleSection::Contains(uintptr_t address) const
 {
 	return address >= start && address <= end;
 }
 
-uintptr_t ModuleSection::Size()
+uintptr_t ModuleSection::Size() const
 {
 	return end - start;
 }

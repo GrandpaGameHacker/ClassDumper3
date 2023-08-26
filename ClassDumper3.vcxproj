@@ -118,6 +118,9 @@
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>

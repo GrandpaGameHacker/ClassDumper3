@@ -84,8 +84,8 @@ struct MemoryRange
 	bool bExecutable, bReadable, bWritable;
 
 	MemoryRange(uintptr_t start, uintptr_t end, bool bExecutable, bool bReadable, bool bWritable);
-	bool Contains(uintptr_t address);
-	uintptr_t Size();
+	bool Contains(uintptr_t address) const;
+	uintptr_t Size() const;
 };
 
 struct MemoryMap
@@ -104,8 +104,8 @@ struct ModuleSection
 	bool bFlagExecutable = false;
 	std::string name;
 	
-	bool Contains(uintptr_t address);
-	uintptr_t Size();
+	bool Contains(uintptr_t address) const;
+	uintptr_t Size() const;
 };
 
 struct Module

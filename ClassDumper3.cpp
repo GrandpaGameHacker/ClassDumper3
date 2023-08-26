@@ -146,3 +146,9 @@ int main()
 	ClassDumper3 Dumper;
 	Dumper.Run();
 }
+
+int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+{
+	ClassDumper3 Dumper;
+	Dumper.Run();
+}

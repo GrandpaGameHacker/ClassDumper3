@@ -140,6 +140,7 @@
     <ClCompile Include="GUI\imgui_stl.cpp" />
     <ClCompile Include="gui\interfaces\IWindow.cpp" />
     <ClCompile Include="GUI\MainWindow.cpp" />
+    <ClCompile Include="GUI\LogWindow.cpp" />
     <ClCompile Include="Util\Strings.cpp" />
     <ClCompile Include="w32\Disassembler.cpp" />
     <ClCompile Include="W32\Memory.cpp" />
@@ -157,6 +158,7 @@
     <ClInclude Include="GUI\imgui_stl.h" />
     <ClInclude Include="gui\interfaces\IWindow.h" />
     <ClInclude Include="GUI\MainWindow.h" />
+    <ClInclude Include="GUI\LogWindow.h" />
     <ClInclude Include="RenderConfig.h" />
     <ClInclude Include="Util\Strings.h" />
     <ClInclude Include="w32\Disassembler.h" />

@@ -13,11 +13,16 @@ MainWindow::~MainWindow()
 
 void MainWindow::Draw()
 {
-	auto Pos = ImGui::GetMainViewport()->Pos;
-	ImGui::SetNextWindowPos(Pos, ImGuiCond_FirstUseEver);
-	ImGui::SetNextWindowSize(ImVec2(300, 300), ImGuiCond_FirstUseEver);
+	ImVec2 screenSize = ImGui::GetIO().DisplaySize;
+
+	ImVec2 windowSize(screenSize.x, screenSize.y * 0.75f);
+	ImVec2 windowPos(0, 0);
+
+	ImGui::SetNextWindowPos(windowPos, ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(windowSize, ImGuiCond_FirstUseEver);
+
 	
-	ImGui::Begin("ClassDumper3", nullptr, ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("ClassDumper3", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
 	if (ImGui::Button("Exit"))
 	{
 		exit(0);

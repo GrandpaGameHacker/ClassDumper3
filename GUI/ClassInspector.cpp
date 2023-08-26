@@ -1,7 +1,9 @@
+
 #include "ClassInspector.h"
 #include "MainWindow.h"
 #include "../Util/Strings.h"
 #include "imgui_stl.h"
+#include "../ClassDumper3.h"
 
 ClassInspector::ClassInspector()
 {
@@ -27,7 +29,7 @@ void ClassInspector::InitializeBindings()
 	}
 	else
 	{
-		std::cout << "ClassInspector : Main window does not exist!! " << std::endl;
+		ClassDumper3::Log("ClassInspector : Main window does not exist!!");
 		exit(-1);
 	}
 }

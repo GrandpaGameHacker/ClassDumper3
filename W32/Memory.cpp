@@ -1,19 +1,22 @@
 #include "Memory.h"
-
-std::vector<ProcessListItem> GetProcessList() {
+#include "../ClassDumper3.h"
+std::vector<ProcessListItem> GetProcessList()
+{
 	std::vector<ProcessListItem> list;
 
 	HANDLE hProcessSnap;
 	PROCESSENTRY32 pe32;
 
 	hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	if (hProcessSnap == INVALID_HANDLE_VALUE) {
+	if (hProcessSnap == INVALID_HANDLE_VALUE)
+	{
 		return list;
 	}
 
 	pe32.dwSize = sizeof(PROCESSENTRY32);
 
-	if (!Process32First(hProcessSnap, &pe32)) {
+	if (!Process32First(hProcessSnap, &pe32))
+	{
 		CloseHandle(hProcessSnap);
 		return list;
 	}
@@ -79,7 +82,8 @@ std::vector<ProcessListItem> GetProcessList(std::string filter)
 		if (item.name.find(filter) != std::string::npos)
 		{
 			HANDLE hModuleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pe32.th32ProcessID);
-			if (hModuleSnap != INVALID_HANDLE_VALUE) {
+			if (hModuleSnap != INVALID_HANDLE_VALUE)
+			{
 				MODULEENTRY32 me32;
 				me32.dwSize = sizeof(MODULEENTRY32);
 
@@ -165,7 +169,7 @@ Process::Process(DWORD dwProcessID)
 	hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessID);
 	if (hProcess == INVALID_HANDLE_VALUE)
 	{
-		std::cout << "Failed to open process" << std::endl;
+		ClassDumper3::Log("Failed to open process");
 	}
 	CheckBits();
 
@@ -180,7 +184,7 @@ Process::Process(const std::string& ProcessName)
 	hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessID);
 	if (hProcess == INVALID_HANDLE_VALUE)
 	{
-		std::cout << "Failed to open process" << std::endl;
+		ClassDumper3::Log("Failed to open process");
 	}
 	CheckBits();
 	char szProcessName[MAX_PATH] = "<unknown>";
@@ -195,13 +199,13 @@ DWORD Process::GetProcessID(const std::string& ProcessName)
 	HANDLE hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 	if (hProcessSnap == INVALID_HANDLE_VALUE)
 	{
-		std::cout << "Failed to create snapshot" << std::endl;
+		ClassDumper3::Log("Failed to create snapshot");
 
 		return 0;
 	}
 	if (!Process32First(hProcessSnap, &pe32))
 	{
-		std::cout << "Failed to get first process" << std::endl;
+		ClassDumper3::Log("Failed to get first process");
 		CloseHandle(hProcessSnap);
 		return 0;
 	}
@@ -213,6 +217,7 @@ DWORD Process::GetProcessID(const std::string& ProcessName)
 			return pe32.th32ProcessID;
 		}
 	} while (Process32Next(hProcessSnap, &pe32));
+	
 	CloseHandle(hProcessSnap);
 	return 0;
 }
@@ -230,8 +235,7 @@ bool Process::Is32Bit()
 
 	if (Kernel32 == NULL)
 	{
-		std::cout << "Failed to get kernel32" << std::endl;
-		exit(0);
+		ClassDumper3::Log("Failed to get kernel32 handle");
 	}
 
 	LPFN_ISWOW64PROCESS fnIsWow64Process = (LPFN_ISWOW64PROCESS)GetProcAddress((Kernel32), "IsWow64Process");
@@ -240,8 +244,7 @@ bool Process::Is32Bit()
 		fnIsWow64Process(this->hProcess, &bIsWow64);
 		return bIsWow64;
 	}
-	std::cout << "Error function IsWow64Process does not exist" << std::endl;
-	exit(0);
+	ClassDumper3::Log("Error function IsWow64Process does not exist");
 	return false;
 }
 
@@ -291,7 +294,7 @@ void Process::CheckBits()
 {
 	if (!IsSameBits())
 	{
-		std::cout << "Process is not the same bits" << std::endl;
+		ClassDumper3::Log("Process is not the same bits");
 	}
 }
 
@@ -363,10 +366,11 @@ void MemoryMap::Setup(Process* process)
 	}
 	if (ranges.size() == 0)
 	{
-		std::cout << "Failed to get memory ranges error code: " << GetLastError() << std::endl;
-		exit(0);
+		ClassDumper3::LogF("Failed to get memory ranges error code: %u", GetLastError());
+
 	}
-	std::cout << "Found " << std::dec << ranges.size() << " memory regions" << std::endl;
+	
+	ClassDumper3::LogF("Found %u memory regions", ranges.size());
 }
 
 bool ModuleSection::Contains(uintptr_t address)
@@ -386,12 +390,12 @@ void ModuleMap::Setup(Process* process)
 	HANDLE hModuleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, process->dwProcessID);
 	if (hModuleSnap == INVALID_HANDLE_VALUE)
 	{
-		std::cout << "Failed to create snapshot" << std::endl;
+		ClassDumper3::Log("Failed to create snapshot");
 		return;
 	}
 	if (!Module32First(hModuleSnap, &me32))
 	{
-		std::cout << "Failed to get first module" << std::endl;
+		ClassDumper3::Log("Failed to get first module");
 		CloseHandle(hModuleSnap);
 		return;
 	}
@@ -421,7 +425,7 @@ void ModuleMap::Setup(Process* process)
 	} while (Module32Next(hModuleSnap, &me32));
 	CloseHandle(hModuleSnap);
 
-	std::cout << "Found " << std::dec << modules.size() << " modules" << std::endl;
+	ClassDumper3::LogF("Found %d modules", modules.size());
 }
 
 Module* ModuleMap::GetModule(const char* name)

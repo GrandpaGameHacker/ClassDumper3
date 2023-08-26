@@ -5,6 +5,7 @@
 #include "GUI/Interfaces/IWindow.h"
 #include "GUI/MainWindow.h"
 #include "GUI/ClassInspector.h"
+#include "GUI/LogWindow.h"
 
 #include <memory>
 
@@ -16,6 +17,13 @@ public:
 	void Initialize();
 	void CleanExit();
 	void GUILoop();
+
+	static void Log(const std::string& InLog);
+	static void Log(const char* InLog);
+	static void LogF(const std::string& Format, ...);
+	static void LogF(const char* Format, ...);
+	static void ClearLog();
+	
 	
 	HWND DXWindow;
 	WNDCLASSEX WindowClass;
@@ -25,6 +33,10 @@ public:
 	ImGuiAppDX11 DXApp;
 #endif
 	
+private:
 	std::shared_ptr<MainWindow> MainWnd;
 	std::shared_ptr<ClassInspector> InspectorWnd;
+	
+	friend LogWindow;
+	static std::shared_ptr<LogWindow> LogWnd;
 };

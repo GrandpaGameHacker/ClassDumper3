@@ -1,5 +1,7 @@
 #include "RTTI.h"
 #include "../Util/Strings.h"
+#include "../ClassDumper3.h"
+
 RTTI::RTTI(TargetProcess* process, std::string moduleName)
 {
 	this->process = process;
@@ -86,7 +88,7 @@ void RTTI::FindValidSections()
 
 	if (!bFound1 || !bFound2)
 	{
-		std::cout << "Failed to find valid sections for RTTI scan" << std::endl;
+		ClassDumper3::Log("Failed to find valid sections for RTTI scan");
 	}
 }
 
@@ -144,7 +146,9 @@ void RTTI::ScanForClasses()
 		}
 		free(buffer);
 	}
-	std::cout << "Found " << PotentialClasses.size() << " potential classes in " << moduleName << std::endl;
+	
+	ClassDumper3::LogF("Found %u potential classes in %s\n", PotentialClasses.size(), moduleName.c_str()); 
+	
 	PotentialClassesFinal.reserve(PotentialClasses.size());
 	Classes.reserve(PotentialClasses.size());
 }
@@ -195,8 +199,7 @@ void RTTI::ValidateClasses()
 	SortClasses();
 	ProcessClasses();
 
-
-	std::cout << "Found " << Classes.size() << " valid classes in " << moduleName << std::endl;
+	ClassDumper3::LogF("Found %u valid classes in %s\n", Classes.size(), moduleName.c_str());
 }
 
 void RTTI::ProcessClasses()
@@ -373,7 +376,7 @@ std::string RTTI::DemangleMSVC(char* symbol)
 	else if (*static_cast<char*>(symbol) == '?') pSymbol = symbol + 2;
 	else
 	{
-		std::cout << "Unknown symbol format: " << symbol << std::endl;
+		ClassDumper3::LogF("Unknown symbol format: %s", symbol);
 		return std::string(symbol);
 	}
 
@@ -384,7 +387,7 @@ std::string RTTI::DemangleMSVC(char* symbol)
 	std::memset(buff, 0, bufferSize);
 	if (!UnDecorateSymbolName(modifiedSymbol.c_str(), buff, bufferSize, 0))
 	{
-		std::cout << "UnDecorateSymbolName failed: " << GetLastError() << std::endl;
+		ClassDumper3::LogF("UnDecorateSymbolName failed: %s", symbol);
 		return std::string(symbol);
 	}
 

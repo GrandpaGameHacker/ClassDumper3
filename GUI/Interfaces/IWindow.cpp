@@ -28,7 +28,8 @@ bool IWindow::operator==(const IWindow& RHS)
 
 void IWindow::Tick()
 {
-    if (bEnabled) {
+    if (bEnabled)
+    {
         Draw();
     }
 }

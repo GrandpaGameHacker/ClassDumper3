@@ -1,5 +1,7 @@
 #include "ClassDumper3.h"
 
+std::shared_ptr<LogWindow> ClassDumper3::LogWnd = nullptr;
+
 int ClassDumper3::Run()
 {
 	WindowClass = { sizeof(WNDCLASSEX), CS_CLASSDC, DXApp.WndProc, 0L, 0L, NULL, NULL, NULL, NULL, NULL, "ClassDumper2", NULL };
@@ -49,6 +51,9 @@ void ClassDumper3::Initialize()
 	
 	InspectorWnd = IWindow::Create<ClassInspector>();
 	InspectorWnd->InitializeBindings();
+
+	LogWnd = IWindow::Create<LogWindow>();
+	LogWnd->Enable();
 }
 
 void ClassDumper3::CleanExit()
@@ -84,6 +89,56 @@ void ClassDumper3::GUILoop()
 		}
 		DXApp.RenderFrame();
 	}
+}
+
+void ClassDumper3::Log(const std::string& InLog)
+{
+	if (!LogWnd) return;
+	LogWnd->Log(InLog);
+}
+
+void ClassDumper3::Log(const char* InLog)
+{
+	if (!LogWnd) return;
+	LogWnd->Log(InLog);
+}
+
+void ClassDumper3::LogF(const std::string& Format, ...)
+{
+	if (!LogWnd) return;
+	const char* FormatC = Format.c_str();
+	if (!LogWnd) return;
+
+	va_list Args;
+	va_start(Args, FormatC);
+
+	char Buffer[4096];
+	vsnprintf_s(Buffer, sizeof(Buffer), FormatC, Args);
+
+	va_end(Args);
+
+	LogWnd->Log(Buffer);
+}
+
+void ClassDumper3::LogF(const char* Format, ...)
+{
+	if (!LogWnd) return;
+
+	va_list Args;
+	va_start(Args, Format);
+
+	char Buffer[4096];
+	vsnprintf_s(Buffer, sizeof(Buffer), Format, Args);
+
+	va_end(Args);
+
+	LogWnd->Log(Buffer);
+}
+
+void ClassDumper3::ClearLog()
+{
+	if (!LogWnd) return;
+	LogWnd->Clear();
 }
 
 int main()

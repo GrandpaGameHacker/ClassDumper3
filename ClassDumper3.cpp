@@ -83,9 +83,11 @@ void ClassDumper3::GUILoop()
 		if (done)
 			break;
 		DXApp.CreateFrame();
-		for (std::shared_ptr<IWindow> window : IWindow::WindowList)
+		// Get a copy of the list incase we add one during draw
+		std::vector<std::shared_ptr<IWindow>> WindowListCopy = IWindow::WindowList;
+		for (auto& Window : WindowListCopy)
 		{
-			window->Tick();
+			Window->Tick();
 		}
 		DXApp.RenderFrame();
 	}
@@ -141,13 +143,7 @@ void ClassDumper3::ClearLog()
 	LogWnd->Clear();
 }
 
-int main()
-{
-	ClassDumper3 Dumper;
-	Dumper.Run();
-}
-
-int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmdshow)
 {
 	ClassDumper3 Dumper;
 	Dumper.Run();

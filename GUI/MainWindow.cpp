@@ -3,8 +3,8 @@
 #include <iostream>
 MainWindow::MainWindow()
 {
-	RefreshProcessList();
 	processFilter = "ClassDumper3.exe";
+	RefreshProcessList();
 }
 
 MainWindow::~MainWindow()

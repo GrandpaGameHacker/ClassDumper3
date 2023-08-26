@@ -27,6 +27,7 @@ struct ProcessListItem
 {
 	DWORD pid;
 	std::string name;
+	std::string path;
 };
 
 std::vector<ProcessListItem> GetProcessList();
@@ -36,6 +37,10 @@ bool IsBlockHighEntropy(const void* data, size_t size, float threshold);
 
 void GetDebugPrivilege();
 
+bool Is32BitExecutable(const std::string& filePath, bool& bFailed);
+bool Is32BitProcess(DWORD dwProcessID);
+
+bool IsSameBitsProcess(const std::string& FilePath);
 
 
 struct Process

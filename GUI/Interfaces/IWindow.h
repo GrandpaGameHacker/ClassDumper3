@@ -3,12 +3,10 @@
 #include <vector>
 #include <memory>
 
-enum class EWindowType
+enum EMouseButton
 {
-	MainWindow,
-	ClassInspector,
-	RenamePopup,
-	None,
+	Left,
+	Right
 };
 
 namespace Color
@@ -44,11 +42,10 @@ public:
 	virtual ~IWindow();
 	bool operator==(const IWindow& RHS);
 	virtual void Tick();
-	virtual void Draw() = 0;
+	virtual void Draw() {};
 	virtual bool IsShown();
 	virtual bool Enable();
-	virtual bool Disable();
-	virtual EWindowType GetWindowType();
+	virtual bool Disable();;
 	
 	template <typename WindowType>
 	static std::shared_ptr<WindowType> Create()
@@ -59,17 +56,16 @@ public:
 	}
 		
 	template <typename WindowType>
-	static std::shared_ptr<WindowType> GetWindow(EWindowType Type)
+	static std::shared_ptr<WindowType> GetWindow()
 	{
 		for (std::shared_ptr<IWindow> Window : WindowList)
 		{
-			if (Window)
-			{
-				if (Window->GetWindowType() == Type)
-				{
-					return static_pointer_cast<WindowType>(Window);
-				}
-			}
+			if (!Window) continue;
+			
+			auto castedWindow = std::dynamic_pointer_cast<WindowType>(Window);
+			if(!castedWindow) continue;	
+			
+			return castedWindow;
 		}
 		return nullptr;
 	}

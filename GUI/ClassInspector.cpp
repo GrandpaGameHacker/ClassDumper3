@@ -9,15 +9,21 @@ ClassInspector::ClassInspector()
 
 ClassInspector::~ClassInspector()
 {
+	std::shared_ptr<MainWindow> Main = IWindow::GetWindow<MainWindow>();
+	if (Main)
+	{
+		Main->OnProcessSelected.DestroyBindings();
+		Main->OnClassSelected.DestroyBindings();
+	}
 }
 
 void ClassInspector::InitializeBindings()
 {
-	std::shared_ptr<MainWindow> main = IWindow::GetWindow<MainWindow>(EWindowType::MainWindow);
-	if (main)
+	std::shared_ptr<MainWindow> Main = IWindow::GetWindow<MainWindow>();
+	if (Main)
 	{
-		main->OnProcessSelected.BindObject(shared_from_this(), &ClassInspector::OnProcessSelectedDelegate);
-		main->OnClassSelected.BindObject(shared_from_this(), &ClassInspector::OnClassSelectedDelegate);
+		Main->OnProcessSelected.BindObject(shared_from_this(), &ClassInspector::OnProcessSelectedDelegate);
+		Main->OnClassSelected.BindObject(shared_from_this(), &ClassInspector::OnClassSelectedDelegate);
 	}
 	else
 	{
@@ -54,19 +60,19 @@ void ClassInspector::Draw()
 		ImGui::Text("CompleteObjectLocator: 0x%s", IntegerToHexStr(SelectedClass->CompleteObjectLocator).c_str());
 		ImGui::Text("Num Inherited: %d", SelectedClass->Parents.size());
 		{
-			auto color = ScopedColor(ImGuiCol_Text, Color::Red);
-			for (std::shared_ptr<_ParentClassNode> parent : SelectedClass->Parents)
+			ScopedColor Color(ImGuiCol_Text, Color::Red);
+			for (std::shared_ptr<_ParentClassNode> Parent : SelectedClass->Parents)
 			{
-				ImGui::Text(parent->Name.c_str());
+				ImGui::Text(Parent->Name.c_str());
 			}
 		}
 
 		ImGui::Text("Num Interfaces: %d", SelectedClass->Interfaces.size());
 		{
-			auto color = ScopedColor(ImGuiCol_Text, Color::Magenta);
-			for (std::shared_ptr<_Class> inter : SelectedClass->Interfaces)
+			ScopedColor Color(ImGuiCol_Text, Color::Magenta);
+			for (std::shared_ptr<_Class> Interface : SelectedClass->Interfaces)
 			{
-				ImGui::Text(inter->Name.c_str());
+				ImGui::Text(Interface->Name.c_str());
 			}
 		}
 
@@ -74,23 +80,23 @@ void ClassInspector::Draw()
 		ImGui::Text("Num Virtual Functions: %d", SelectedClass->Functions.size());
 
 		{
-			auto color = ScopedColor(ImGuiCol_Text, Color::Green);
-			int index = 0;
-			for (auto& func : SelectedClass->FunctionNames)
+			ScopedColor Color(ImGuiCol_Text, Color::Green);
+			int Index = 0;
+			for (auto& Function: SelectedClass->FunctionNames)
 			{
 				
-				std::string function_text = "%d - " + IntegerToHexStr(func.first) + " : " + func.second;
-				ImGui::Text(function_text.c_str(), index);
-				if (ImGui::IsItemClicked(0))
+				std::string FunctionText = "%d - " + IntegerToHexStr(Function.first) + " : " + Function.second;
+				ImGui::Text(FunctionText.c_str(), Index);
+				if (ImGui::IsItemClicked(EMouseButton::Left))
 				{
 					// insert disassembler tool here
 				}
-				if (ImGui::IsItemClicked(1))
+				if (ImGui::IsItemClicked(EMouseButton::Right))
 				{
-					RenameFunction(&func);
+					RenameFunction(&Function);
 				}
 
-				index++;
+				Index++;
 			}
 		}
 		ImGui::End();
@@ -98,19 +104,19 @@ void ClassInspector::Draw()
 
 }
 
-void ClassInspector::OnProcessSelectedDelegate(std::shared_ptr<TargetProcess> target, std::shared_ptr<RTTI> rtti)
+void ClassInspector::OnProcessSelectedDelegate(std::shared_ptr<TargetProcess> InTarget, std::shared_ptr<RTTI> InRTTI)
 {
-	Target = target;
-	RTTIObserver = rtti;
+	Target = InTarget;
+	RTTIObserver = InRTTI;
 }
 
-void ClassInspector::OnClassSelectedDelegate(std::shared_ptr<_Class> cl)
+void ClassInspector::OnClassSelectedDelegate(std::shared_ptr<_Class> InClass)
 {
-	SelectedClass = cl;
+	SelectedClass = InClass;
 	Enable();
 }
 
-void ClassInspector::RenameFunction(std::pair<const uintptr_t, std::string>* func)
+void ClassInspector::RenameFunction(std::pair<const uintptr_t, std::string>* InFunction)
 {
 	if (RenamePopupWnd)
 	{
@@ -119,79 +125,87 @@ void ClassInspector::RenameFunction(std::pair<const uintptr_t, std::string>* fun
 	}
 
 	RenamePopupWnd = IWindow::Create<RenamePopup>();
-	RenamePopupWnd->Initialize(func);
+	RenamePopupWnd->Initialize(InFunction);
 }
 
 void ClassInspector::CopyInfo()
 {
-	// Copy all class info
-	std::string info = "Name: " + SelectedClass->Name + "\n";
-	info += "CompleteObjectLocator: 0x" + IntegerToHexStr(SelectedClass->CompleteObjectLocator) + "\n";
-	info += "Num Inherited: " + std::to_string(SelectedClass->Parents.size()) + "\n";
-	for (std::shared_ptr<_ParentClassNode> parent : SelectedClass->Parents)
-	{
-		info += parent->Name + "\n";
-	}
-	info += "Num Interfaces: " + std::to_string(SelectedClass->Interfaces.size()) + "\n";
-	info += "Virtual Function Table: 0x" + IntegerToHexStr(SelectedClass->VTable) + "\n";
-	info += "Num Virtual Functions: " + std::to_string(SelectedClass->Functions.size()) + "\n";
-	for (auto& func : SelectedClass->FunctionNames)
-	{
-		info += IntegerToHexStr(func.first) + " : " + func.second + "\n";
-	}
-	
-	// Copy to clipboard
-	if (OpenClipboard(nullptr))
-	{
-		EmptyClipboard();
-		HGLOBAL hClipboardData = 0;
-		hClipboardData = GlobalAlloc(GMEM_MOVEABLE, info.size() + 1);
-		if (hClipboardData != 0)
-		{
-			char* pchData;
-			pchData = (char*)GlobalLock(hClipboardData);
-			if (pchData)
-			{
-				strcpy_s(pchData, info.size() + 1, info.c_str());
-				GlobalUnlock(hClipboardData);
-				SetClipboardData(CF_TEXT, hClipboardData);
-			}
-		}
-		CloseClipboard();
-	}
+    // Copy all class info
+    std::string Info = "Name: " + SelectedClass->Name + "\n";
+	Info += "CompleteObjectLocator: 0x" + IntegerToHexStr(SelectedClass->CompleteObjectLocator) + "\n";
+	Info += "Num Inherited: " + std::to_string(SelectedClass->Parents.size()) + "\n";
+
+    for (std::shared_ptr<_ParentClassNode> parent : SelectedClass->Parents)
+    {
+		Info += parent->Name + "\n";
+    }
+
+	Info += "Num Interfaces: " + std::to_string(SelectedClass->Interfaces.size()) + "\n";
+	Info += "Virtual Function Table: 0x" + IntegerToHexStr(SelectedClass->VTable) + "\n";
+	Info += "Num Virtual Functions: " + std::to_string(SelectedClass->Functions.size()) + "\n";
+
+    for (auto& FunctionName : SelectedClass->FunctionNames)
+    {
+		Info += IntegerToHexStr(FunctionName.first) + " : " + FunctionName.second + "\n";
+    }
+    
+    // Copy to clipboard
+    if (OpenClipboard(nullptr))
+    {
+        EmptyClipboard();
+        HGLOBAL ClipboardDataHandle = GlobalAlloc(GMEM_MOVEABLE, Info.size() + 1);
+
+        if (ClipboardDataHandle != 0)
+        {
+            char* PCHData;
+			PCHData = (char*)GlobalLock(ClipboardDataHandle);
+
+            if (PCHData)
+            {
+                strcpy_s(PCHData, Info.size() + 1, Info.c_str());
+                GlobalUnlock(ClipboardDataHandle);
+                SetClipboardData(CF_TEXT, ClipboardDataHandle);
+            }
+        }
+
+        CloseClipboard();
+    }
 }
 
-void RenamePopup::Initialize(std::pair<const uintptr_t, std::string>* func)
+
+void RenamePopup::Initialize(std::pair<const uintptr_t, std::string>* InFunction)
 {
-	func_ref = func;
+	FunctionPtr = InFunction;
 	Enable();
 }
 
 void RenamePopup::Draw()
 {
-	ImGui::SetNextWindowFocus();
+    ImGui::SetNextWindowFocus();
+    ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Appearing);
 
-	ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Appearing);
-	ImGui::Begin("Rename Function", nullptr, ImGuiWindowFlags_NoCollapse);
+    ImGui::Begin("Rename Function", nullptr, ImGuiWindowFlags_NoCollapse);
 
-	ImGui::InputText("New name", &new_name, 0);
-	if (ImGui::Button("Rename") && !new_name.empty())
-	{
-		func_ref->second = new_name;
-		Disable();
-	}
+    ImGui::InputText("New name", &NewName, 0);
 
-	if (ImGui::IsKeyDown(ImGuiKey_Enter) && !new_name.empty())
-	{
-		func_ref->second = new_name;
-		Disable();
-	}
+    if (ImGui::Button("Rename") && !NewName.empty())
+    {
+        FunctionPtr->second = NewName;
+        Disable();
+    }
 
-	ImGui::SameLine();
+    if (ImGui::IsKeyDown(ImGuiKey_Enter) && !NewName.empty())
+    {
+        FunctionPtr->second = NewName;
+        Disable();
+    }
 
-	if (ImGui::Button("Cancel"))
-	{
-		Disable();
-	}
-	ImGui::End();
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel"))
+    {
+        Disable();
+    }
+
+    ImGui::End();
 }

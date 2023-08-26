@@ -1,22 +1,19 @@
 #include "Memory.h"
 
-std::vector<ProcessListItem> GetProcessList()
-{
+std::vector<ProcessListItem> GetProcessList() {
 	std::vector<ProcessListItem> list;
 
 	HANDLE hProcessSnap;
 	PROCESSENTRY32 pe32;
 
 	hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	if (hProcessSnap == INVALID_HANDLE_VALUE)
-	{
+	if (hProcessSnap == INVALID_HANDLE_VALUE) {
 		return list;
 	}
 
 	pe32.dwSize = sizeof(PROCESSENTRY32);
 
-	if (!Process32First(hProcessSnap, &pe32))
-	{
+	if (!Process32First(hProcessSnap, &pe32)) {
 		CloseHandle(hProcessSnap);
 		return list;
 	}
@@ -26,8 +23,28 @@ std::vector<ProcessListItem> GetProcessList()
 		ProcessListItem item;
 		item.pid = pe32.th32ProcessID;
 		item.name = pe32.szExeFile;
+
+		HANDLE hModuleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pe32.th32ProcessID);
+		if (hModuleSnap != INVALID_HANDLE_VALUE) {
+			MODULEENTRY32 me32;
+			me32.dwSize = sizeof(MODULEENTRY32);
+
+			if (Module32First(hModuleSnap, &me32))
+			{
+				item.path = me32.szExePath; // Store the full path of the executable
+			}
+
+			CloseHandle(hModuleSnap);
+		}
+		
+		if (IsSameBitsProcess(item.path))
+		{
+			list.push_back(item);
+		}
+		
 		list.push_back(item);
-	} while (Process32Next(hProcessSnap, &pe32));
+	}
+	while (Process32Next(hProcessSnap, &pe32));
 
 	CloseHandle(hProcessSnap);
 	return list;
@@ -61,12 +78,85 @@ std::vector<ProcessListItem> GetProcessList(std::string filter)
 		item.name = pe32.szExeFile;
 		if (item.name.find(filter) != std::string::npos)
 		{
-			list.push_back(item);
+			HANDLE hModuleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pe32.th32ProcessID);
+			if (hModuleSnap != INVALID_HANDLE_VALUE) {
+				MODULEENTRY32 me32;
+				me32.dwSize = sizeof(MODULEENTRY32);
+
+				if (Module32First(hModuleSnap, &me32))
+				{
+					item.path = me32.szExePath; // Store the full path of the executable
+				}
+
+				CloseHandle(hModuleSnap);
+			}
+
+			if (IsSameBitsProcess(item.path))
+			{
+				list.push_back(item);
+			}
 		}
 	} while (Process32Next(hProcessSnap, &pe32));
 
 	CloseHandle(hProcessSnap);
 	return list;
+}
+
+bool Is32BitExecutable(const std::string& filePath, bool& bFailed)
+{
+	HANDLE hFile = CreateFileA(filePath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE)
+	{
+		bFailed = true;
+		return false;
+	}
+
+	HANDLE hMap = CreateFileMapping(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
+	if (!hMap)
+	{
+		CloseHandle(hFile);
+		bFailed = true;
+		return false;
+	}
+
+	LPVOID pFileBase = MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, 0);
+	if (!pFileBase)
+	{
+		bFailed = true;
+		CloseHandle(hMap);
+		CloseHandle(hFile);
+		return false;
+	}
+
+	IMAGE_DOS_HEADER* pDosHeader = static_cast<IMAGE_DOS_HEADER*>(pFileBase);
+	if (pDosHeader->e_magic != IMAGE_DOS_SIGNATURE)
+	{
+		bFailed = true;
+		UnmapViewOfFile(pFileBase);
+		CloseHandle(hMap);
+		CloseHandle(hFile);
+		return false;
+	}
+
+	IMAGE_NT_HEADERS* pNtHeaders = reinterpret_cast<IMAGE_NT_HEADERS*>(
+		reinterpret_cast<char*>(pFileBase) + pDosHeader->e_lfanew);
+
+	bool is64Bit = pNtHeaders->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC;
+
+	UnmapViewOfFile(pFileBase);
+	CloseHandle(hMap);
+	CloseHandle(hFile);
+
+	bFailed = false;
+	return !is64Bit;
+}
+
+bool IsSameBitsProcess(const std::string& FilePath)
+{
+	bool b32Local = sizeof(void*) == 4;
+	bool bFailed = false;
+	bool b32Remote = Is32BitExecutable(FilePath, bFailed);
+	return (b32Local == b32Remote) && !bFailed;
 }
 
 Process::Process(DWORD dwProcessID)

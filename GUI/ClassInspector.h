@@ -10,11 +10,11 @@ class RenamePopup : public IWindow
 public:
 	RenamePopup() {};
 	~RenamePopup(){};
-	void Initialize(std::pair<const uintptr_t, std::string>* func);
+	void Initialize(std::pair<const uintptr_t, std::string>* InFunction);
 	void Draw() override;
 protected:
-	std::string new_name;
-	std::pair<const uintptr_t, std::string>* func_ref = nullptr;
+	std::string NewName;
+	std::pair<const uintptr_t, std::string>* FunctionPtr = nullptr;
 };
 
 class ClassInspector : public IWindow, public std::enable_shared_from_this<ClassInspector>
@@ -24,12 +24,11 @@ public:
 	~ClassInspector();
 	void InitializeBindings();
 	void Draw() override;
-	EWindowType GetWindowType() override { return EWindowType::ClassInspector; };
 protected:
 	void DrawClass();
-	void OnProcessSelectedDelegate(std::shared_ptr<TargetProcess> target, std::shared_ptr<RTTI> rtti);
-	void OnClassSelectedDelegate(std::shared_ptr<_Class> cl);
-	void RenameFunction(std::pair<const uintptr_t, std::string>* func);
+	void OnProcessSelectedDelegate(std::shared_ptr<TargetProcess> Target, std::shared_ptr<RTTI> RTTI);
+	void OnClassSelectedDelegate(std::shared_ptr<_Class> InClass);
+	void RenameFunction(std::pair<const uintptr_t, std::string>* InFunction);
 	void CopyInfo();
 	
 	std::shared_ptr<_Class> SelectedClass;

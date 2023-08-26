@@ -11,7 +11,6 @@ public:
 	MainWindow();
 	~MainWindow();
 	void Draw() override;
-	EWindowType GetWindowType() override { return EWindowType::MainWindow; };
 	
 	MulticastDelegate<std::shared_ptr<_Class>> OnClassSelected;
 	MulticastDelegate<std::shared_ptr<TargetProcess>, std::shared_ptr<RTTI>> OnProcessSelected;

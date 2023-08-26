@@ -10,14 +10,14 @@ IWindow::IWindow()
     WindowID = WindowIDCount++;
 }
 
-IWindow::~IWindow() {
+IWindow::~IWindow()
+{
     for (size_t i = 0; i < IWindow::WindowList.size(); i++)
     {
         if (IWindow::WindowList[i].get() == this)
         {
             IWindow::WindowList.erase(IWindow::WindowList.begin() + i);
-        };
-
+        }
     }
 }
 
@@ -48,9 +48,4 @@ bool IWindow::Disable()
 {
     bEnabled = false;
     return false;
-}
-
-EWindowType IWindow::GetWindowType()
-{
-    return EWindowType::None;
 }

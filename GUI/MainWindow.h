@@ -18,13 +18,14 @@ protected:
 	void DrawProcessList();
 	void RefreshProcessList();
 	void SelectProcess();
+	void FilterClasses(const std::string& filter);
 	void DrawClassList();
-	void DrawClass(std::shared_ptr<_Class> cl);
+	void DrawClass(const std::shared_ptr<_Class>& cl);
 	
-	
-
 	std::string selectedProcessName;
 	std::string processFilter;
+	std::string classFilter;
+	std::vector<std::shared_ptr<_Class>> filteredClassesCache;
 	std::vector<ProcessListItem> ProcessList;
 	std::shared_ptr<TargetProcess> Target;
 	std::shared_ptr<RTTI> RTTIObserver;

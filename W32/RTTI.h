@@ -141,7 +141,6 @@ protected:
 	void SetLoadingStage(std::string stage);
 
 	std::atomic_bool bIsProcessing = false;
-	
 	constexpr static size_t LoadingStageSize = 128;
 	
 	std::mutex LoadingStageMutex;

@@ -5,7 +5,7 @@
 
 MainWindow::MainWindow()
 {
-	processFilter = "ClassDumper3.exe";
+	processFilter = "";
 	RefreshProcessList();
 }
 
@@ -81,12 +81,22 @@ void MainWindow::RefreshProcessList()
 
 void MainWindow::SelectProcess()
 {
+	if (RTTIObserver && RTTIObserver->IsAsyncProcessing()) return;
 	if (Target && Target->IsValid())
 	{
 		RTTIObserver = std::make_shared<RTTI>(Target.get(), selectedProcessName);
 		RTTIObserver->ProcessRTTIAsync();
 		OnProcessSelected(Target, RTTIObserver);
 	}
+}
+
+void MainWindow::FilterClasses(const std::string& filter)
+{
+	if (filter.empty()) return;
+	if (!RTTIObserver) return;
+	if (RTTIObserver->IsAsyncProcessing()) return;
+	
+	filteredClassesCache = RTTIObserver->FindAll(filter);
 }
 
 void MainWindow::DrawClassList()
@@ -102,15 +112,42 @@ void MainWindow::DrawClassList()
 
 	if(!RTTIObserver->GetClasses().size()) return;
 
-	ImGui::BeginChildFrame(1, ImVec2(ImGui::GetWindowWidth() , ImGui::GetWindowHeight()));
-	for (std::shared_ptr<_Class> cl : RTTIObserver->GetClasses())
+	ImGui::Text("Class Filter:");
+
+	if (ImGui::InputText("##", &classFilter, 0))
 	{
-		DrawClass(cl);
+		FilterClasses(classFilter);
 	}
+	else if (!classFilter.length() && filteredClassesCache.size())
+	{
+		filteredClassesCache.clear();
+	}
+
+	ImGui::BeginChildFrame(1, ImVec2(ImGui::GetWindowWidth() , ImGui::GetWindowHeight()));
+	
+	if (!classFilter.length())
+	{
+		for (const std::shared_ptr<_Class>& cl : RTTIObserver->GetClasses())
+		{
+			DrawClass(cl);
+		}
+	}
+	else
+	{
+		if (!filteredClassesCache.size())
+		{
+			ImGui::Text("No classes found for this filter");
+		}
+		for (const std::shared_ptr<_Class>& cl : filteredClassesCache)
+		{
+			DrawClass(cl);
+		}
+	}
+
 	ImGui::EndChildFrame();
 }
 
-void MainWindow::DrawClass(std::shared_ptr<_Class> cl)
+void MainWindow::DrawClass(const std::shared_ptr<_Class>& cl)
 {
 	if (cl == SelectedClass)
 	{

@@ -53,10 +53,15 @@ std::shared_ptr<_Class> RTTI::FindFirst(const std::string& ClassName)
 std::vector<std::shared_ptr<_Class>> RTTI::FindAll(const std::string& ClassName)
 {
 	std::vector<std::shared_ptr<_Class>> classes;
+	std::string lowerClassName = ClassName;
+	std::transform(lowerClassName.begin(), lowerClassName.end(), lowerClassName.begin(), ::tolower);
 
-	for (const auto& entry : NameClassMap)
+	for (auto& entry : NameClassMap)
 	{
-		if (entry.first.find(ClassName) != std::string::npos)
+		std::string lowerEntryFirst = entry.first;
+		std::transform(lowerEntryFirst.begin(), lowerEntryFirst.end(), lowerEntryFirst.begin(), ::tolower);
+
+		if (lowerEntryFirst.find(lowerClassName) != std::string::npos)
 		{
 			classes.push_back(entry.second);
 		}
@@ -73,25 +78,29 @@ std::vector<std::shared_ptr<_Class>> RTTI::GetClasses()
 void RTTI::ProcessRTTI()
 {
 	FindValidSections();
+
 	ScanForClasses();
+
 	if (PotentialClasses.size() > 0)
 	{
 		ValidateClasses();
 	}
-	bIsProcessing.store(false);
+
+	bIsProcessing.store(false, std::memory_order_release);
 }
 
 void RTTI::ProcessRTTIAsync()
 {
-	if (bIsProcessing.load() == true) return;
-	bIsProcessing.store(true);
+	if (bIsProcessing.load(std::memory_order_acquire)) return;
+	
+	bIsProcessing.store(true, std::memory_order_release);
 	ProcessThread = std::thread(&RTTI::ProcessRTTI, this);
 	ProcessThread.detach();
 }
 
 bool RTTI::IsAsyncProcessing()
 {
-	if (!bIsProcessing.load())
+	if (!bIsProcessing.load(std::memory_order_acquire))
 	{
 		return false;
 	}
@@ -406,9 +415,12 @@ void RTTI::ProcessClasses()
 void RTTI::EnumerateVirtualFunctions(std::shared_ptr<_Class> c)
 {
 	constexpr int maxVFuncs = 0x4000;
-	auto buffer = std::make_unique<uintptr_t[]>(maxVFuncs);
+	static std::unique_ptr<uintptr_t[]> buffer = std::make_unique<uintptr_t[]>(maxVFuncs);
+	
 	memset(buffer.get(), 0, sizeof(uintptr_t) * maxVFuncs);
+	
 	c->Functions.clear();
+	
 	process->Read(c->VTable, buffer.get(), maxVFuncs);
 	for (size_t i = 0; i < maxVFuncs / sizeof(uintptr_t); i++)
 	{

@@ -1,8 +1,10 @@
 #include "IWindow.h"
 std::vector<std::shared_ptr<IWindow>> IWindow::WindowList;
-
+std::vector<std::shared_ptr<IWindow>> IWindow::DeferredWindowList;
 int IWindow::Height;
 int IWindow::Width;
+
+bool IWindow::bDrawingFrame = false;
 
 IWindow::IWindow()
 {
@@ -19,6 +21,14 @@ IWindow::~IWindow()
             IWindow::WindowList.erase(IWindow::WindowList.begin() + i);
         }
     }
+    
+	for (size_t i = 0; i < IWindow::DeferredWindowList.size(); i++)
+	{
+		if (IWindow::DeferredWindowList[i].get() == this)
+		{
+			IWindow::DeferredWindowList.erase(IWindow::DeferredWindowList.begin() + i);
+		}
+	}
 }
 
 bool IWindow::operator==(const IWindow& RHS)

@@ -1,6 +1,7 @@
 #pragma once
 #include "Memory.h"
 #include <atomic>
+
 struct PMD
 {
 	int mdisp = 0; // member displacement
@@ -141,18 +142,19 @@ protected:
 	void SetLoadingStage(std::string stage);
 
 	std::atomic_bool bIsProcessing = false;
+	std::thread ProcessThread;
 	constexpr static size_t LoadingStageSize = 128;
 	
 	std::mutex LoadingStageMutex;
 	std::string LoadingStage = "Not Loading Anything...";
 	std::string LoadingStageCache;
-	
-	std::thread ProcessThread;
 
-	std::string moduleName;
+	
 	Module* module;
+	std::string moduleName;
 	uintptr_t moduleBase;
 	TargetProcess* process;
+
 	std::vector<ModuleSection> ExecutableSections;
 	std::vector<ModuleSection> ReadOnlySections;
 	std::vector<PotentialClass> PotentialClasses;

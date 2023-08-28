@@ -171,22 +171,32 @@ void RTTI::ScanForClasses()
 {
 	SetLoadingStage("Scanning for classes...");
 	uintptr_t* buffer;
-	size_t sectionSize = 0;
+	size_t TotalSectionSize = 0;
 	size_t max = 0;
+
 	for (const ModuleSection& section : ReadOnlySections)
 	{
-		sectionSize = section.Size();
+		TotalSectionSize += section.Size();
+	}
+	
+	// now we only need one buffer alloc
+	buffer = reinterpret_cast<uintptr_t*>(malloc(TotalSectionSize));
+
+	if (!buffer)
+	{
+		std::cout << "Out of memory: line" << __LINE__;
+		exit(-1);
+	}
+	
+	memset(buffer, 0, TotalSectionSize);
+	
+	for (const ModuleSection& section : ReadOnlySections)
+	{
+		size_t sectionSize = section.Size();
 		size_t max = sectionSize / sizeof(uintptr_t);
-		buffer = reinterpret_cast<uintptr_t*>(malloc(sectionSize));
 
-		if (!buffer)
-		{
-			std::cout << "Out of memory: line" << __LINE__;
-			exit(-1);
-		}
-
-		memset(buffer, 0, sectionSize);
 		
+		memset(buffer, 0, TotalSectionSize);
 		process->Read(section.start, buffer, sectionSize);
 
 		
@@ -205,9 +215,9 @@ void RTTI::ScanForClasses()
 				PotentialClasses.push_back(c);
 			}
 		}
-		free(buffer);
 	}
 	
+	free(buffer);
 	ClassDumper3::LogF("Found %u potential classes in %s\n", PotentialClasses.size(), moduleName.c_str()); 
 	
 	PotentialClassesFinal.reserve(PotentialClasses.size());
@@ -350,6 +360,7 @@ void RTTI::ProcessClasses()
 		{
 			// read class array (skip the first one)
 			std::unique_ptr<DWORD[]> baseClassArray = std::make_unique<DWORD[]>(0x4000);
+			
 			std::vector<uintptr_t> baseClasses;
 			baseClasses.reserve(c->numBaseClasses);
 			RTTICompleteObjectLocator col;

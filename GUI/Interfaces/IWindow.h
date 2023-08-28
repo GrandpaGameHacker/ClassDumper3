@@ -51,7 +51,14 @@ public:
 	static std::shared_ptr<WindowType> Create()
 	{
 		std::shared_ptr<WindowType> Window = std::make_shared<WindowType>();
-		WindowList.push_back(Window);
+		if (bDrawingFrame)
+		{
+			DeferredWindowList.push_back(Window);
+		}
+		else
+		{
+			WindowList.push_back(Window);
+		}
 		return Window;
 	}
 		
@@ -71,7 +78,9 @@ public:
 	}
 	
 	static std::vector<std::shared_ptr<IWindow>> WindowList;
+	static std::vector<std::shared_ptr<IWindow>> DeferredWindowList;
 	static int Width, Height;
+	static bool bDrawingFrame;
 private:
 	size_t WindowID;
 	bool bEnabled = false;

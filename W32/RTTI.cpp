@@ -255,9 +255,9 @@ void RTTI::ValidateClasses()
 			continue;
 		}
 
-		char Name[bufferSize];
-		Process->Read(pTypeDescriptor + offsetof(RTTITypeDescriptor, name), Name, bufferSize);
-		Name[bufferSize - 1] = 0;
+		char Name[StandardBuffer];
+		Process->Read(pTypeDescriptor + offsetof(RTTITypeDescriptor, name), Name, StandardBuffer);
+		Name[StandardBuffer - 1] = 0;
 		PClass.Name = Name;
 		PClass.DemangledName = DemangleMSVC(Name);
 
@@ -296,6 +296,7 @@ void RTTI::ProcessClasses()
 		ValidClass->VTable = PClassFinal.VTable;
 		ValidClass->MangledName = PClassFinal.Name;
 		ValidClass->Name = PClassFinal.DemangledName;
+		
 		FilterSymbol(ValidClass->Name);
 
 		ValidClass->VTableOffset = CompleteObjectLocator.offset;
@@ -346,26 +347,28 @@ void RTTI::ProcessClasses()
 
 	// process super classes
 	SetLoadingStage("Processing super class data...");
+	
 	int interfaceCount = 0;
-	for (std::shared_ptr<_Class>& c : Classes)
+	
+	for (std::shared_ptr<_Class>& CClass : Classes)
 	{
-		if (c->numBaseClasses > 1)
+		if (CClass->numBaseClasses > 1)
 		{
 			// read class array (skip the first one)
 			std::unique_ptr<DWORD[]> baseClassArray = std::make_unique<DWORD[]>(0x4000);
 			
 			std::vector<uintptr_t> baseClasses;
-			baseClasses.reserve(c->numBaseClasses);
+			baseClasses.reserve(CClass->numBaseClasses);
 			RTTICompleteObjectLocator col;
-			Process->Read(c->CompleteObjectLocator, &col, sizeof(RTTICompleteObjectLocator));
+			Process->Read(CClass->CompleteObjectLocator, &col, sizeof(RTTICompleteObjectLocator));
 
 			RTTIClassHierarchyDescriptor chd;
 			uintptr_t pClassDescriptor = col.pClassDescriptor + ModuleBase;
 			Process->Read(pClassDescriptor, &chd, sizeof(RTTIClassHierarchyDescriptor));
 			uintptr_t pBaseClassArray = chd.pBaseClassArray + ModuleBase;
-			Process->Read(pBaseClassArray, baseClassArray.get(), sizeof(uintptr_t) * c->numBaseClasses - 1);
+			Process->Read(pBaseClassArray, baseClassArray.get(), sizeof(uintptr_t) * CClass->numBaseClasses - 1);
 
-			for (unsigned int i = 0; i < c->numBaseClasses - 1; i++)
+			for (unsigned int i = 0; i < CClass->numBaseClasses - 1; i++)
 			{
 				baseClasses.push_back(baseClassArray[i] + ModuleBase);
 			}
@@ -373,59 +376,59 @@ void RTTI::ProcessClasses()
 			DWORD lastdisplacement = 0;
 			DWORD depth = 0;
 
-			for (unsigned int i = 0; i < c->numBaseClasses - 1; i++)
+			for (unsigned int i = 0; i < CClass->numBaseClasses - 1; i++)
 			{
-				RTTIBaseClassDescriptor bcd;
-				std::shared_ptr<_ParentClassNode> node = std::make_shared<_ParentClassNode>();
-				Process->Read(baseClasses[i], &bcd, sizeof(RTTIBaseClassDescriptor));
+				RTTIBaseClassDescriptor BaseClassDescriptor;
+				std::shared_ptr<_ParentClassNode> ParentClassNode = std::make_shared<_ParentClassNode>();
+				Process->Read(baseClasses[i], &BaseClassDescriptor, sizeof(RTTIBaseClassDescriptor));
 
 				// process child name
-				char name[bufferSize];
-				Process->Read((uintptr_t)bcd.pTypeDescriptor + ModuleBase + offsetof(RTTITypeDescriptor, name), name, bufferSize);
-				name[bufferSize - 1] = 0;
-				node->MangledName = name;
-				node->Name = DemangleMSVC(name);
-				node->attributes = bcd.attributes;
-				FilterSymbol(node->Name);
+				char name[StandardBuffer];
+				Process->Read((uintptr_t)BaseClassDescriptor.pTypeDescriptor + ModuleBase + offsetof(RTTITypeDescriptor, name), name, StandardBuffer);
+				name[StandardBuffer - 1] = 0;
+				ParentClassNode->MangledName = name;
+				ParentClassNode->Name = DemangleMSVC(name);
+				ParentClassNode->attributes = BaseClassDescriptor.attributes;
+				FilterSymbol(ParentClassNode->Name);
 
-				node->ChildClass = c;
-				node->Class = FindFirst(node->Name);
-				node->numContainedBases = bcd.numContainedBases;
-				node->where = bcd.where;
+				ParentClassNode->ChildClass = CClass;
+				ParentClassNode->Class = FindFirst(ParentClassNode->Name);
+				ParentClassNode->numContainedBases = BaseClassDescriptor.numContainedBases;
+				ParentClassNode->where = BaseClassDescriptor.where;
 
-				if (bcd.where.mdisp == lastdisplacement)
+				if (BaseClassDescriptor.where.mdisp == lastdisplacement)
 				{
 					depth++;
 				}
 				else
 				{
-					lastdisplacement = bcd.where.mdisp;
+					lastdisplacement = BaseClassDescriptor.where.mdisp;
 					depth = 0;
 				}
-				node->treeDepth = depth;
-				if (c->VTableOffset == node->where.mdisp && c->bInterface)
+				ParentClassNode->treeDepth = depth;
+				if (CClass->VTableOffset == ParentClassNode->where.mdisp && CClass->bInterface)
 				{
-					std::string OriginalName = c->Name;
-					c->Name = node->Name;
-					c->FormattedName = "interface " + OriginalName + " -> " + node->Name;
-					c->MangledName = node->MangledName;
+					std::string OriginalName = CClass->Name;
+					CClass->Name = ParentClassNode->Name;
+					CClass->FormattedName = "interface " + OriginalName + " -> " + ParentClassNode->Name;
+					CClass->MangledName = ParentClassNode->MangledName;
 				}
-				c->Parents.push_back(node);
+				CClass->Parents.push_back(ParentClassNode);
 			}
 		}
 	}
 }
 
-void RTTI::EnumerateVirtualFunctions(std::shared_ptr<_Class>& c)
+void RTTI::EnumerateVirtualFunctions(std::shared_ptr<_Class>& CClass)
 {
 	constexpr int maxVFuncs = 0x4000;
 	static std::unique_ptr<uintptr_t[]> buffer = std::make_unique<uintptr_t[]>(maxVFuncs);
 	
 	memset(buffer.get(), 0, sizeof(uintptr_t) * maxVFuncs);
 	
-	c->Functions.clear();
+	CClass->Functions.clear();
 	
-	Process->Read(c->VTable, buffer.get(), maxVFuncs);
+	Process->Read(CClass->VTable, buffer.get(), maxVFuncs);
 	for (size_t i = 0; i < maxVFuncs / sizeof(uintptr_t); i++)
 	{
 		if (buffer[i] == 0)
@@ -436,9 +439,9 @@ void RTTI::EnumerateVirtualFunctions(std::shared_ptr<_Class>& c)
 		{
 			break;
 		}
-		c->Functions.push_back(buffer[i]);
+		CClass->Functions.push_back(buffer[i]);
 		std::string function_name = "sub_" + IntegerToHexStr(buffer[i]);
-		c->FunctionNames.try_emplace(buffer[i], function_name);
+		CClass->FunctionNames.try_emplace(buffer[i], function_name);
 	}
 }
 
@@ -459,9 +462,9 @@ std::string RTTI::DemangleMSVC(char* symbol)
 	std::string modifiedSymbol = pSymbol;
 	modifiedSymbol.insert(0, VTABLE_SYMBOL_PREFIX);
 	modifiedSymbol.insert(modifiedSymbol.size(), VTABLE_SYMBOL_SUFFIX);
-	char buff[bufferSize];
-	std::memset(buff, 0, bufferSize);
-	if (!UnDecorateSymbolName(modifiedSymbol.c_str(), buff, bufferSize, 0))
+	char buff[StandardBuffer];
+	std::memset(buff, 0, StandardBuffer);
+	if (!UnDecorateSymbolName(modifiedSymbol.c_str(), buff, StandardBuffer, 0))
 	{
 		ClassDumper3::LogF("UnDecorateSymbolName failed: %s", symbol);
 		return std::string(symbol);

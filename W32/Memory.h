@@ -120,13 +120,13 @@ struct FModuleMap
 
 struct MemoryBlock
 {
-	void* blockCopy;
-	void* blockAddress;
-	size_t blockSize;
+	void* Copy;
+	void* Address;
+	size_t Size;
 
 	~MemoryBlock()
 	{
-		free(blockCopy);
+		free(Copy);
 	}
 };
 

@@ -466,8 +466,8 @@ FMemoryRange* FTargetProcess::GetMemoryRange(uintptr_t Address)
 
 std::vector<MemoryBlock> FTargetProcess::GetReadableMemory()
 {
-	std::vector<std::future<MemoryBlock>> futures;
-	std::vector<MemoryBlock> blocks;
+	std::vector<std::future<MemoryBlock>> Futures;
+	std::vector<MemoryBlock> Blocks;
 	for (auto& Range : MemoryMap.Ranges)
 	{
 		if (Range.bReadable)
@@ -475,24 +475,28 @@ std::vector<MemoryBlock> FTargetProcess::GetReadableMemory()
 			// get a future using async launch lambda
 			auto future = std::async(std::launch::async, [&Range, &Process = Process]()
 				{
-					MemoryBlock block;
-					block.blockAddress = (void*)Range.Start;
-					block.blockSize = Range.Size();
-					block.blockCopy = malloc(block.blockSize);
-					ReadProcessMemory(Process.ProcessHandle, block.blockAddress, block.blockCopy, block.blockSize, NULL);
-					return block;
+					MemoryBlock Block;
+					
+					Block.Address = (void*)Range.Start;
+					Block.Size = Range.Size();
+					Block.Copy = malloc(Block.Size);
+					
+					if (!Block.Copy) return Block;
+					
+					ReadProcessMemory(Process.ProcessHandle, Block.Address, Block.Copy, Block.Size, NULL);
+					return Block;
 				});
-			futures.push_back(std::move(future));
+			Futures.push_back(std::move(future));
 		}
 	}
 
-	// wait for all futures to finish
-	for (auto& future : futures)
+	// wait for all Futures to finish
+	for (auto& Future : Futures)
 	{
-		blocks.push_back(future.get());
+		Blocks.push_back(Future.get());
 	}
 
-	return blocks;
+	return Blocks;
 }
 
 std::vector<std::future<MemoryBlock>> FTargetProcess::AsyncGetReadableMemory()
@@ -505,12 +509,16 @@ std::vector<std::future<MemoryBlock>> FTargetProcess::AsyncGetReadableMemory()
 			// get a future using async launch lambda
 			auto future = std::async(std::launch::async, [&Range, &Process = Process]()
 				{
-					MemoryBlock block;
-					block.blockAddress = (void*)Range.Start;
-					block.blockSize = Range.Size();
-					block.blockCopy = malloc(block.blockSize);
-					ReadProcessMemory(Process.ProcessHandle, block.blockAddress, block.blockCopy, block.blockSize, NULL);
-					return block;
+					MemoryBlock Block;
+					
+					Block.Address = (void*)Range.Start;
+					Block.Size = Range.Size();
+					Block.Copy = malloc(Block.Size);
+					
+					if (!Block.Copy) return Block;
+					
+					ReadProcessMemory(Process.ProcessHandle, Block.Address, Block.Copy, Block.Size, NULL);
+					return Block;
 				});
 			futures.push_back(std::move(future));
 		}

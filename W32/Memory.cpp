@@ -184,6 +184,7 @@ FProcess::FProcess(const std::string& ProcessName)
 	if (ProcessHandle == INVALID_HANDLE_VALUE)
 	{
 		ClassDumper3::Log("Failed to open process");
+		return;
 	}
 	char szProcessName[MAX_PATH] = "<unknown>";
 	GetModuleBaseNameA(ProcessHandle, NULL, szProcessName, sizeof(szProcessName) / sizeof(char));
@@ -192,37 +193,38 @@ FProcess::FProcess(const std::string& ProcessName)
 
 DWORD FProcess::GetProcessID(const std::string& ProcessName)
 {
-	PROCESSENTRY32 pe32;
-	pe32.dwSize = sizeof(PROCESSENTRY32);
-	HANDLE hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	if (hProcessSnap == INVALID_HANDLE_VALUE)
+	PROCESSENTRY32 ProcessEntry;
+	ProcessEntry.dwSize = sizeof(PROCESSENTRY32);
+	
+	HANDLE ProcessSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (ProcessSnapshotHandle == INVALID_HANDLE_VALUE)
 	{
 		ClassDumper3::Log("Failed to create snapshot");
 
 		return 0;
 	}
-	if (!Process32First(hProcessSnap, &pe32))
+	if (!Process32First(ProcessSnapshotHandle, &ProcessEntry))
 	{
 		ClassDumper3::Log("Failed to get first process");
-		CloseHandle(hProcessSnap);
+		CloseHandle(ProcessSnapshotHandle);
 		return 0;
 	}
 	do
 	{
-		if (ProcessName == pe32.szExeFile)
+		if (ProcessName == ProcessEntry.szExeFile)
 		{
-			CloseHandle(hProcessSnap);
-			return pe32.th32ProcessID;
+			CloseHandle(ProcessSnapshotHandle);
+			return ProcessEntry.th32ProcessID;
 		}
-	} while (Process32Next(hProcessSnap, &pe32));
+	} while (Process32Next(ProcessSnapshotHandle, &ProcessEntry));
 	
-	CloseHandle(hProcessSnap);
+	CloseHandle(ProcessSnapshotHandle);
 	return 0;
 }
 
 bool FProcess::IsValid()
 {
-	return this->ProcessHandle != INVALID_HANDLE_VALUE;
+	return ProcessHandle != INVALID_HANDLE_VALUE;
 }
 
 bool FProcess::AttachDebugger()
@@ -364,24 +366,33 @@ void FModuleMap::Setup(FProcess* process)
 	{
 		Modules.push_back(FModule());
 		FModule& Module = Modules.back();
+		
 		Module.BaseAddress = ModuleEntry.modBaseAddr;
 		Module.Name = ModuleEntry.szModule;
-		IMAGE_DOS_HEADER dosHeader;
-		ReadProcessMemory(process->ProcessHandle, ModuleEntry.modBaseAddr, &dosHeader, sizeof(dosHeader), nullptr);
-		IMAGE_NT_HEADERS ntHeaders;
-		ReadProcessMemory(process->ProcessHandle, (void*)((uintptr_t)ModuleEntry.modBaseAddr + dosHeader.e_lfanew), &ntHeaders, sizeof(ntHeaders), nullptr);
-		IMAGE_SECTION_HEADER* sectionHeaders = new IMAGE_SECTION_HEADER[ntHeaders.FileHeader.NumberOfSections];
-		ReadProcessMemory(process->ProcessHandle, (void*)((uintptr_t)ModuleEntry.modBaseAddr + dosHeader.e_lfanew + sizeof(IMAGE_NT_HEADERS)), sectionHeaders, sizeof(IMAGE_SECTION_HEADER) * ntHeaders.FileHeader.NumberOfSections, nullptr);
-		for (int i = 0; i < ntHeaders.FileHeader.NumberOfSections; i++)
+		
+		IMAGE_DOS_HEADER DOSHeader;
+		IMAGE_NT_HEADERS NTHeaders;
+		IMAGE_SECTION_HEADER* SectionHeaders = nullptr;
+		
+		ReadProcessMemory(process->ProcessHandle, ModuleEntry.modBaseAddr, &DOSHeader, sizeof(DOSHeader), nullptr);
+		
+		ReadProcessMemory(process->ProcessHandle, (void*)((uintptr_t)ModuleEntry.modBaseAddr + DOSHeader.e_lfanew), &NTHeaders, sizeof(NTHeaders), nullptr);
+		
+		SectionHeaders = new IMAGE_SECTION_HEADER[NTHeaders.FileHeader.NumberOfSections];
+		
+		ReadProcessMemory(process->ProcessHandle, (void*)((uintptr_t)ModuleEntry.modBaseAddr + DOSHeader.e_lfanew + sizeof(IMAGE_NT_HEADERS)), SectionHeaders, sizeof(IMAGE_SECTION_HEADER) * NTHeaders.FileHeader.NumberOfSections, nullptr);
+		for (int i = 0; i < NTHeaders.FileHeader.NumberOfSections; i++)
 		{
-			IMAGE_SECTION_HEADER& sectionHeader = sectionHeaders[i];
+			IMAGE_SECTION_HEADER& SectionHeader = SectionHeaders[i];
+			
 			Module.Sections.push_back(FModuleSection());
-			FModuleSection& section = Module.Sections.back();
-			section.Name = (char*)sectionHeader.Name;
-			section.Start = (uintptr_t)ModuleEntry.modBaseAddr + sectionHeader.VirtualAddress;
-			section.End = section.Start + sectionHeader.Misc.VirtualSize;
-			section.bFlagExecutable = sectionHeader.Characteristics & IMAGE_SCN_MEM_EXECUTE;
-			section.bFlagReadonly = sectionHeader.Characteristics & IMAGE_SCN_MEM_READ;
+			FModuleSection& Section = Module.Sections.back();
+			
+			Section.Name = (char*)SectionHeader.Name;
+			Section.Start = (uintptr_t)ModuleEntry.modBaseAddr + SectionHeader.VirtualAddress;
+			Section.End = Section.Start + SectionHeader.Misc.VirtualSize;
+			Section.bFlagExecutable = SectionHeader.Characteristics & IMAGE_SCN_MEM_EXECUTE;
+			Section.bFlagReadonly = SectionHeader.Characteristics & IMAGE_SCN_MEM_READ;
 		}
 	} while (Module32Next(ModuleSnapshotHandle, &ModuleEntry));
 	CloseHandle(ModuleSnapshotHandle);

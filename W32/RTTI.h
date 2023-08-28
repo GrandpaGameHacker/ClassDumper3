@@ -75,7 +75,7 @@ struct _Class
 
 	DWORD numBaseClasses = 0;
 	std::vector<std::shared_ptr<_ParentClassNode>> Parents;
-	std::vector<std::shared_ptr<_Class>> Interfaces;
+	std::vector<std::weak_ptr<_Class>> Interfaces;
 
 	bool bMultipleInheritance = false;
 	bool bVirtualInheritance = false;
@@ -93,9 +93,9 @@ struct _ParentClassNode
 	PMD where = { 0,0,0 };
 	DWORD attributes = 0;
 	// lowest child class (the root of the tree)
-	std::shared_ptr<_Class> ChildClass = nullptr;
+	std::weak_ptr<_Class> ChildClass;
 	// base class of this class (found by looking for class of the same name)
-	std::shared_ptr<_Class> Class = nullptr;
+	std::weak_ptr<_Class> Class;
 	// depth of the class in the tree
 	DWORD treeDepth = 0;
 };
@@ -109,7 +109,7 @@ struct _ParentClassNode
 class RTTI
 {
 public:
-	RTTI(TargetProcess* process, std::string moduleName);
+	RTTI(FTargetProcess* InProcess, std::string InModuleName);
 	std::shared_ptr<_Class> Find(uintptr_t VTable);
 	std::shared_ptr<_Class> FindFirst(const std::string& ClassName);
 	std::vector<std::shared_ptr<_Class>> FindAll(const std::string& ClassName);
@@ -150,10 +150,10 @@ protected:
 	std::string LoadingStageCache;
 
 	
-	Module* module;
-	std::string moduleName;
-	uintptr_t moduleBase;
-	TargetProcess* process;
+	FModule* Module;
+	std::string ModuleName;
+	uintptr_t ModuleBase;
+	FTargetProcess* Process;
 
 	std::vector<ModuleSection> ExecutableSections;
 	std::vector<ModuleSection> ReadOnlySections;

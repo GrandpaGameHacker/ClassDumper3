@@ -72,8 +72,10 @@ void ClassInspector::Draw()
 		ImGui::Text("Num Interfaces: %d", SelectedClass->Interfaces.size());
 		{
 			ScopedColor Color(ImGuiCol_Text, Color::Magenta);
-			for (std::shared_ptr<_Class> Interface : SelectedClass->Interfaces)
+			for (std::weak_ptr<_Class> InterfaceWeak : SelectedClass->Interfaces)
 			{
+				std::shared_ptr<_Class> Interface = InterfaceWeak.lock();
+				if (!Interface) continue;
 				ImGui::Text(Interface->Name.c_str());
 			}
 		}
@@ -106,7 +108,7 @@ void ClassInspector::Draw()
 
 }
 
-void ClassInspector::OnProcessSelectedDelegate(std::shared_ptr<TargetProcess> InTarget, std::shared_ptr<RTTI> InRTTI)
+void ClassInspector::OnProcessSelectedDelegate(std::shared_ptr<FTargetProcess> InTarget, std::shared_ptr<RTTI> InRTTI)
 {
 	Target = InTarget;
 	RTTIObserver = InRTTI;

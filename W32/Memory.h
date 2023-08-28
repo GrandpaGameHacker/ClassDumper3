@@ -23,42 +23,42 @@
 
 constexpr int bufferSize = 0x1000;
 
-struct ProcessListItem
+struct FProcessListItem
 {
-	DWORD pid;
-	std::string name;
-	std::string path;
+	DWORD PID;
+	std::string Name;
+	std::string Path;
 };
 
-std::vector<ProcessListItem> GetProcessList();
-std::vector<ProcessListItem> GetProcessList(std::string filter);
+std::vector<FProcessListItem> GetProcessList();
+std::vector<FProcessListItem> GetProcessList(const std::string& Filter);
 float ShannonEntropyBlock(const void* data, size_t size);
 bool IsBlockHighEntropy(const void* data, size_t size, float threshold);
 
 void GetDebugPrivilege();
 
 bool Is32BitExecutable(const std::string& filePath, bool& bFailed);
-bool Is32BitProcess(DWORD dwProcessID);
+bool Is32BitProcess(DWORD PID);
 
 bool IsSameBitsProcess(const std::string& FilePath);
 
 
-struct Process
+struct FProcess
 {
-	HANDLE hProcess;
-	DWORD dwProcessID;
+	HANDLE ProcessHandle;
+	DWORD PID;
 	std::string ProcessName;
 
-	DEBUG_EVENT debugEvent;
+	DEBUG_EVENT DebugEvent;
 	bool bIsDebugActive = false;
-	CONTEXT debugActiveContext;
+	CONTEXT DebugActiveContext;
 
-	Process();
-	Process(DWORD dwProcessID);
-	Process(const std::string& ProcessName);
-	Process(HANDLE hProcess, DWORD dwProcessID, const std::string& ProcessName);
-	Process& operator=(const Process& other);
-	Process(const Process& other);
+	FProcess();
+	FProcess(DWORD InPID);
+	FProcess(const std::string& InProcessName);
+	FProcess(HANDLE InProcessHandle, DWORD InPID, const std::string& InProcessName);
+	FProcess& operator=(const FProcess& Other);
+	FProcess(const FProcess& other);
 	
 	DWORD GetProcessID(const std::string& ProcessName);
 	bool IsValid();
@@ -67,7 +67,7 @@ struct Process
 	bool AttachDebugger();
 	bool DetachDebugger();
 	bool DebugWait();
-	bool DebugContinue(DWORD dwContinueStatus);
+	bool DebugContinue(DWORD ContinueStatus);
 	void* AllocRW(size_t size);
 	void* AllocRWX(size_t size);
 	bool Free(void* Address);
@@ -77,22 +77,22 @@ private:
 
 };
 
-struct MemoryRange
+struct FMemoryRange
 {
-	uintptr_t start;
-	uintptr_t end;
+	uintptr_t Start;
+	uintptr_t End;
 	bool bExecutable, bReadable, bWritable;
 
-	MemoryRange(uintptr_t start, uintptr_t end, bool bExecutable, bool bReadable, bool bWritable);
-	bool Contains(uintptr_t address) const;
+	FMemoryRange(uintptr_t InStart, uintptr_t InEnd, bool InbExecutable, bool InbReadable, bool InbWritable);
+	bool Contains(uintptr_t Address) const;
 	uintptr_t Size() const;
 };
 
-struct MemoryMap
+struct FMemoryMap
 {
-	std::vector<MemoryRange> ranges;
-	MemoryRange* currentRange = nullptr;
-	void Setup(Process* process);
+	std::vector<FMemoryRange> Ranges;
+	FMemoryRange* CurrentRange = nullptr;
+	void Setup(FProcess* Process);
 };
 
 
@@ -108,21 +108,21 @@ struct ModuleSection
 	uintptr_t Size() const;
 };
 
-struct Module
+struct FModule
 {
 	void* baseAddress = nullptr;
 	std::vector<ModuleSection> sections;
 	std::string name;
 };
 
-struct ModuleMap
+struct FModuleMap
 {
-	std::vector<Module> modules;
-	void Setup(Process* process);
+	std::vector<FModule> Modules;
+	void Setup(FProcess* process);
 
-	Module* GetModule(const char* name);
-	Module* GetModule(const std::string& name);
-	Module* GetModule(uintptr_t address);
+	FModule* GetModule(const char* name);
+	FModule* GetModule(const std::string& name);
+	FModule* GetModule(uintptr_t address);
 };
 
 struct MemoryBlock
@@ -137,23 +137,23 @@ struct MemoryBlock
 	}
 };
 
-struct TargetProcess
+struct FTargetProcess
 {
-	Process process;
-	MemoryMap memoryMap;
-	ModuleMap moduleMap;
+	FProcess process;
+	FMemoryMap memoryMap;
+	FModuleMap moduleMap;
 
 	void Setup(const std::string& processName);
 	void Setup(DWORD processID);
-	void Setup(Process process);
+	void Setup(FProcess process);
 
 	/*********** Process Utils ***********/
 
 	bool Is64Bit();
 	bool IsValid();
 
-	Module* GetModule(const std::string& moduleName);
-	MemoryRange* GetMemoryRange(uintptr_t address);
+	FModule* GetModule(const std::string& moduleName);
+	FMemoryRange* GetMemoryRange(uintptr_t address);
 	std::vector<MemoryBlock> GetReadableMemory();
 	std::vector<std::future<MemoryBlock>> AsyncGetReadableMemory();
 	ModuleSection* GetModuleSection(uintptr_t address);
@@ -176,7 +176,7 @@ struct TargetProcess
 	T Read(uintptr_t address)
 	{
 		T buffer;
-		ReadProcessMemory(process.hProcess, (void*)address, &buffer, sizeof(T), NULL);
+		ReadProcessMemory(process.ProcessHandle, (void*)address, &buffer, sizeof(T), NULL);
 		return buffer;
 	}
 
@@ -186,7 +186,7 @@ struct TargetProcess
 		return std::async(std::launch::async, [this, address]()
 			{
 				T buffer;
-				ReadProcessMemory(process.hProcess, (void*)address, &buffer, sizeof(T), NULL);
+				ReadProcessMemory(process.ProcessHandle, (void*)address, &buffer, sizeof(T), NULL);
 				return buffer;
 			});
 	}
@@ -197,7 +197,7 @@ struct TargetProcess
 	template<typename T>
 	void Write(uintptr_t address, T value)
 	{
-		WriteProcessMemory(process.hProcess, (void*)address, &value, sizeof(T), NULL);
+		WriteProcessMemory(process.ProcessHandle, (void*)address, &value, sizeof(T), NULL);
 	}
 
 	HANDLE InjectDLL(const std::string& dllPath);
@@ -210,15 +210,15 @@ template <typename T>
 class RemoteVariable
 {
 public:
-	RemoteVariable(TargetProcess* process, T value)
+	RemoteVariable(FTargetProcess* process, T value)
 	{
 		this->process = process;
 		this->value = value;
-		this->address = (uintptr_t)VirtualAllocEx(process->process.hProcess, NULL, sizeof(T), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+		this->address = (uintptr_t)VirtualAllocEx(process->process.ProcessHandle, NULL, sizeof(T), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 		this->Write();
 	}
 
-	RemoteVariable(TargetProcess* process, uintptr_t address)
+	RemoteVariable(FTargetProcess* process, uintptr_t address)
 	{
 		this->process = process;
 		this->address = address;
@@ -227,7 +227,7 @@ public:
 
 	~RemoteVariable()
 	{
-		VirtualFreeEx(process->process.hProcess, (void*)address, sizeof(T), MEM_RELEASE);
+		VirtualFreeEx(process->process.ProcessHandle, (void*)address, sizeof(T), MEM_RELEASE);
 	}
 
 	T operator=(T value)
@@ -253,7 +253,7 @@ public:
 		process->Write(address, &value, sizeof(T));
 	}
 
-	TargetProcess* process;
+	FTargetProcess* process;
 	uintptr_t address;
 	T value;
 };
@@ -267,35 +267,35 @@ public:
 
 	}
 
-	RemotePointer(TargetProcess* process, uintptr_t address)
+	RemotePointer(FTargetProcess* process, uintptr_t address)
 	{
 		Setup(process, address);
 	}
 
-	RemotePointer(TargetProcess* process, uintptr_t address, uintptr_t offset)
+	RemotePointer(FTargetProcess* process, uintptr_t address, uintptr_t offset)
 	{
 		Setup(process, address, offset);
 	}
 
-	RemotePointer(TargetProcess* process, uintptr_t address, std::vector<uintptr_t> offsets)
+	RemotePointer(FTargetProcess* process, uintptr_t address, std::vector<uintptr_t> offsets)
 	{
 		Setup(process, address, offsets);
 	}
 
-	void Setup(TargetProcess* process, uintptr_t address)
+	void Setup(FTargetProcess* process, uintptr_t address)
 	{
 		this->process = process;
 		this->address = address;
 	}
 
-	void Setup(TargetProcess* process, uintptr_t address, std::vector<uintptr_t> offsets)
+	void Setup(FTargetProcess* process, uintptr_t address, std::vector<uintptr_t> offsets)
 	{
 		this->process = process;
 		this->address = address;
 		this->offsets = offsets;
 	}
 
-	void Setup(TargetProcess* process, uintptr_t address, uintptr_t offset)
+	void Setup(FTargetProcess* process, uintptr_t address, uintptr_t offset)
 	{
 		this->process = process;
 		this->address = address;
@@ -379,7 +379,7 @@ private:
 		return address;
 	}
 
-	TargetProcess* process;
+	FTargetProcess* process;
 	uintptr_t address;
 	std::vector<uintptr_t> offsets;
 };
@@ -387,7 +387,7 @@ private:
 class RemoteFunction
 {
 public:
-	RemoteFunction(TargetProcess* process, uintptr_t address)
+	RemoteFunction(FTargetProcess* process, uintptr_t address)
 	{
 		this->process = process;
 		this->address = address;
@@ -395,19 +395,19 @@ public:
 
 	HANDLE operator()()
 	{
-		return CreateRemoteThread(process->process.hProcess, NULL, NULL, (LPTHREAD_START_ROUTINE)address, NULL, NULL, NULL);
+		return CreateRemoteThread(process->process.ProcessHandle, NULL, NULL, (LPTHREAD_START_ROUTINE)address, NULL, NULL, NULL);
 	}
 
 	HANDLE operator()(void* args)
 	{
-		return CreateRemoteThread(process->process.hProcess, NULL, NULL, (LPTHREAD_START_ROUTINE)address, args, NULL, NULL);
+		return CreateRemoteThread(process->process.ProcessHandle, NULL, NULL, (LPTHREAD_START_ROUTINE)address, args, NULL, NULL);
 	}
 
 	// function to allocate arguments for injected code, its up to the injected code to unpack the arguments if it is a struct
 	template<typename T>
 	void* AllocArgs(T args)
 	{
-		void* argsAddress = VirtualAllocEx(process->process.hProcess, NULL, sizeof(T), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+		void* argsAddress = VirtualAllocEx(process->process.ProcessHandle, NULL, sizeof(T), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 		process->Write(argsAddress, &args, sizeof(T));
 		return argsAddress;
 	};
@@ -416,10 +416,10 @@ public:
 	void WaitAndFreeArgs(void* argsAddress, HANDLE hThread)
 	{
 		WaitForSingleObject(hThread.Get(), INFINITE);
-		VirtualFreeEx(process->process.hProcess, argsAddress, sizeof(T), MEM_RELEASE);
+		VirtualFreeEx(process->process.ProcessHandle, argsAddress, sizeof(T), MEM_RELEASE);
 	}
 
 private:
-	TargetProcess* process;
+	FTargetProcess* process;
 	uintptr_t address;
 };

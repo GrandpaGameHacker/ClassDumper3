@@ -1,109 +1,109 @@
 #include "Memory.h"
 #include "../ClassDumper3.h"
-std::vector<ProcessListItem> GetProcessList()
+
+std::vector<FProcessListItem> GetProcessList()
 {
-	std::vector<ProcessListItem> list;
+	std::vector<FProcessListItem> ProcessList;
 
-	HANDLE hProcessSnap;
-	PROCESSENTRY32 pe32;
+	HANDLE ProcessSnapshotHandle;
+	PROCESSENTRY32 ProcessEntry;
 
-	hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	if (hProcessSnap == INVALID_HANDLE_VALUE)
+	ProcessSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (ProcessSnapshotHandle == INVALID_HANDLE_VALUE)
 	{
-		return list;
+		return ProcessList;
 	}
 
-	pe32.dwSize = sizeof(PROCESSENTRY32);
+	ProcessEntry.dwSize = sizeof(PROCESSENTRY32);
 
-	if (!Process32First(hProcessSnap, &pe32))
+	if (!Process32First(ProcessSnapshotHandle, &ProcessEntry))
 	{
-		CloseHandle(hProcessSnap);
-		return list;
+		CloseHandle(ProcessSnapshotHandle);
+		return ProcessList;
 	}
 
 	do
 	{
-		ProcessListItem item;
-		item.pid = pe32.th32ProcessID;
-		item.name = pe32.szExeFile;
+		FProcessListItem ProcessItem;
+		ProcessItem.PID = ProcessEntry.th32ProcessID;
+		ProcessItem.Name = ProcessEntry.szExeFile;
 
-		HANDLE hModuleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pe32.th32ProcessID);
-		if (hModuleSnap != INVALID_HANDLE_VALUE) {
-			MODULEENTRY32 me32;
-			me32.dwSize = sizeof(MODULEENTRY32);
+		HANDLE ModuleSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, ProcessEntry.th32ProcessID);
+		if (ModuleSnapshotHandle != INVALID_HANDLE_VALUE)
+		{
+			MODULEENTRY32 ModuleEntry;
+			ModuleEntry.dwSize = sizeof(MODULEENTRY32);
 
-			if (Module32First(hModuleSnap, &me32))
+			if (Module32First(ModuleSnapshotHandle, &ModuleEntry))
 			{
-				item.path = me32.szExePath; // Store the full path of the executable
+				ProcessItem.Path = ModuleEntry.szExePath; // Store the full Path of the executable
 			}
 
-			CloseHandle(hModuleSnap);
+			CloseHandle(ModuleSnapshotHandle);
 		}
-		
-		if (IsSameBitsProcess(item.path))
-		{
-			list.push_back(item);
-		}
-		
-		list.push_back(item);
-	}
-	while (Process32Next(hProcessSnap, &pe32));
 
-	CloseHandle(hProcessSnap);
-	return list;
+		if (IsSameBitsProcess(ProcessItem.Path))
+		{
+			ProcessList.push_back(ProcessItem);
+		}
+	} while (Process32Next(ProcessSnapshotHandle, &ProcessEntry));
+
+	CloseHandle(ProcessSnapshotHandle);
+
+	return ProcessList;
 }
 
-std::vector<ProcessListItem> GetProcessList(std::string filter)
+std::vector<FProcessListItem> GetProcessList(const std::string& Filter)
 {
-	std::vector<ProcessListItem> list;
+	std::vector<FProcessListItem> List;
 
-	HANDLE hProcessSnap;
-	PROCESSENTRY32 pe32;
+	HANDLE ProcessSnapshotHandle;
+	PROCESSENTRY32 ProcessEntry;
 
-	hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	if (hProcessSnap == INVALID_HANDLE_VALUE)
+	ProcessSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (ProcessSnapshotHandle == INVALID_HANDLE_VALUE)
 	{
-		return list;
+		return List;
 	}
 
-	pe32.dwSize = sizeof(PROCESSENTRY32);
+	ProcessEntry.dwSize = sizeof(PROCESSENTRY32);
 
-	if (!Process32First(hProcessSnap, &pe32))
+	if (!Process32First(ProcessSnapshotHandle, &ProcessEntry))
 	{
-		CloseHandle(hProcessSnap);
-		return list;
+		CloseHandle(ProcessSnapshotHandle);
+		return List;
 	}
 
 	do
 	{
-		ProcessListItem item;
-		item.pid = pe32.th32ProcessID;
-		item.name = pe32.szExeFile;
-		if (item.name.find(filter) != std::string::npos)
+		FProcessListItem ProcessItem;
+		ProcessItem.PID = ProcessEntry.th32ProcessID;
+		ProcessItem.Name = ProcessEntry.szExeFile;
+		if (ProcessItem.Name.find(Filter) != std::string::npos)
 		{
-			HANDLE hModuleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pe32.th32ProcessID);
-			if (hModuleSnap != INVALID_HANDLE_VALUE)
+			HANDLE ModuleSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, ProcessEntry.th32ProcessID);
+			if (ModuleSnapshotHandle != INVALID_HANDLE_VALUE)
 			{
-				MODULEENTRY32 me32;
-				me32.dwSize = sizeof(MODULEENTRY32);
+				MODULEENTRY32 ModuleEntry;
+				ModuleEntry.dwSize = sizeof(MODULEENTRY32);
 
-				if (Module32First(hModuleSnap, &me32))
+				if (Module32First(ModuleSnapshotHandle, &ModuleEntry))
 				{
-					item.path = me32.szExePath; // Store the full path of the executable
+					ProcessItem.Path = ModuleEntry.szExePath; // Store the full Path of the executable
 				}
 
-				CloseHandle(hModuleSnap);
+				CloseHandle(ModuleSnapshotHandle);
 			}
 
-			if (IsSameBitsProcess(item.path))
+			if (IsSameBitsProcess(ProcessItem.Path))
 			{
-				list.push_back(item);
+				List.push_back(ProcessItem);
 			}
 		}
-	} while (Process32Next(hProcessSnap, &pe32));
+	} while (Process32Next(ProcessSnapshotHandle, &ProcessEntry));
 
-	CloseHandle(hProcessSnap);
-	return list;
+	CloseHandle(ProcessSnapshotHandle);
+	return List;
 }
 
 bool Is32BitExecutable(const std::string& filePath, bool& bFailed)
@@ -163,36 +163,36 @@ bool IsSameBitsProcess(const std::string& FilePath)
 	return (b32Local == b32Remote) && !bFailed;
 }
 
-Process::Process(DWORD dwProcessID)
+FProcess::FProcess(DWORD PID)
 {
-	this->dwProcessID = dwProcessID;
-	hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessID);
-	if (hProcess == INVALID_HANDLE_VALUE)
+	this->PID = PID;
+	ProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, PID);
+	if (ProcessHandle == INVALID_HANDLE_VALUE)
 	{
 		ClassDumper3::Log("Failed to open process");
 	}
 	CheckBits();
 
 	char szProcessName[MAX_PATH] = "<unknown>";
-	GetModuleBaseNameA(hProcess, NULL, szProcessName, sizeof(szProcessName) / sizeof(char));
+	GetModuleBaseNameA(ProcessHandle, NULL, szProcessName, sizeof(szProcessName) / sizeof(char));
 	this->ProcessName = szProcessName;
 }
 
-Process::Process(const std::string& ProcessName)
+FProcess::FProcess(const std::string& ProcessName)
 {
-	this->dwProcessID = GetProcessID(ProcessName);
-	hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessID);
-	if (hProcess == INVALID_HANDLE_VALUE)
+	this->PID = GetProcessID(ProcessName);
+	ProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, PID);
+	if (ProcessHandle == INVALID_HANDLE_VALUE)
 	{
 		ClassDumper3::Log("Failed to open process");
 	}
 	CheckBits();
 	char szProcessName[MAX_PATH] = "<unknown>";
-	GetModuleBaseNameA(hProcess, NULL, szProcessName, sizeof(szProcessName) / sizeof(char));
+	GetModuleBaseNameA(ProcessHandle, NULL, szProcessName, sizeof(szProcessName) / sizeof(char));
 	this->ProcessName = szProcessName;
 }
 
-DWORD Process::GetProcessID(const std::string& ProcessName)
+DWORD FProcess::GetProcessID(const std::string& ProcessName)
 {
 	PROCESSENTRY32 pe32;
 	pe32.dwSize = sizeof(PROCESSENTRY32);
@@ -222,12 +222,12 @@ DWORD Process::GetProcessID(const std::string& ProcessName)
 	return 0;
 }
 
-bool Process::IsValid()
+bool FProcess::IsValid()
 {
-	return this->hProcess != INVALID_HANDLE_VALUE;
+	return this->ProcessHandle != INVALID_HANDLE_VALUE;
 }
 
-bool Process::Is32Bit()
+bool FProcess::Is32Bit()
 {
 	BOOL bIsWow64 = FALSE;
 	typedef BOOL(WINAPI* LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
@@ -241,56 +241,56 @@ bool Process::Is32Bit()
 	LPFN_ISWOW64PROCESS fnIsWow64Process = (LPFN_ISWOW64PROCESS)GetProcAddress((Kernel32), "IsWow64Process");
 	if (fnIsWow64Process != nullptr)
 	{
-		fnIsWow64Process(this->hProcess, &bIsWow64);
+		fnIsWow64Process(this->ProcessHandle, &bIsWow64);
 		return bIsWow64;
 	}
 	ClassDumper3::Log("Error function IsWow64Process does not exist");
 	return false;
 }
 
-bool Process::IsSameBits()
+bool FProcess::IsSameBits()
 {
 	bool b64Remote = !Is32Bit();
 	bool b64Local = sizeof(void*) == 8;
 	return b64Remote == b64Local;
 }
 
-bool Process::AttachDebugger()
+bool FProcess::AttachDebugger()
 {
-	return DebugActiveProcess(this->dwProcessID);
+	return DebugActiveProcess(PID);
 }
 
-bool Process::DetachDebugger()
+bool FProcess::DetachDebugger()
 {
-	return DebugActiveProcessStop(this->dwProcessID);
+	return DebugActiveProcessStop(PID);
 }
 
-bool Process::DebugWait()
+bool FProcess::DebugWait()
 {
-	return WaitForDebugEvent(&this->debugEvent, INFINITE);
+	return WaitForDebugEvent(&DebugEvent, INFINITE);
 }
 
-bool Process::DebugContinue(DWORD dwContinueStatus)
+bool FProcess::DebugContinue(DWORD ContinueStatus)
 {
-	return ContinueDebugEvent(this->debugEvent.dwProcessId, this->debugEvent.dwThreadId, dwContinueStatus);
+	return ContinueDebugEvent(DebugEvent.dwProcessId, DebugEvent.dwThreadId, ContinueStatus);
 }
 
-void* Process::AllocRW(size_t size)
+void* FProcess::AllocRW(size_t size)
 {
-	return VirtualAllocEx(this->hProcess, NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	return VirtualAllocEx(ProcessHandle, NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 }
 
-void* Process::AllocRWX(size_t size)
+void* FProcess::AllocRWX(size_t size)
 {
-	return VirtualAllocEx(this->hProcess, NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	return VirtualAllocEx(ProcessHandle, NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 }
 
-bool Process::Free(void* Address)
+bool FProcess::Free(void* Address)
 {
-	return VirtualFreeEx(this->hProcess, Address, 0, MEM_RELEASE);
+	return VirtualFreeEx(ProcessHandle, Address, 0, MEM_RELEASE);
 }
 
-void Process::CheckBits()
+void FProcess::CheckBits()
 {
 	if (!IsSameBits())
 	{
@@ -299,72 +299,72 @@ void Process::CheckBits()
 }
 
 
-Process& Process::operator=(const Process& other)
+FProcess& FProcess::operator=(const FProcess& Other)
 {
-	this->hProcess = other.hProcess;
-	this->dwProcessID = other.dwProcessID;
-	this->ProcessName = other.ProcessName;
+	ProcessHandle = Other.ProcessHandle;
+	PID = Other.PID;
+	ProcessName = Other.ProcessName;
 	return *this;
 }
 
-Process::Process(const Process& other)
+FProcess::FProcess(const FProcess& Other)
 {
-	this->hProcess = other.hProcess;
-	this->dwProcessID = other.dwProcessID;
-	this->ProcessName = other.ProcessName;
+	ProcessHandle = Other.ProcessHandle;
+	PID = Other.PID;
+	ProcessName = Other.ProcessName;
 }
 
-Process::Process(HANDLE hProcess, DWORD dwProcessID, const std::string& ProcessName)
+FProcess::FProcess(HANDLE InProcessHandle, DWORD InPID, const std::string& InProcessName)
 {
-	this->hProcess = hProcess;
-	this->dwProcessID = dwProcessID;
-	this->ProcessName = ProcessName;
+	ProcessHandle = InProcessHandle;
+	PID = InPID;
+	ProcessName = InProcessName;
 }
 
-Process::Process()
+FProcess::FProcess()
 {
-	this->hProcess = INVALID_HANDLE_VALUE;
-	this->dwProcessID = NULL;
-	this->ProcessName = "";
+	ProcessHandle = INVALID_HANDLE_VALUE;
+	PID = NULL;
+	ProcessName = "";
 }
 
-MemoryRange::MemoryRange(uintptr_t start, uintptr_t end, bool bExecutable, bool bReadable, bool bWritable)
+FMemoryRange::FMemoryRange(uintptr_t InStart, uintptr_t InEnd, bool InbExecutable, bool InbReadable, bool InbWritable)
 {
-	this->start = start;
-	this->end = end;
-	this->bExecutable = bExecutable;
-	this->bReadable = bReadable;
-	this->bWritable = bWritable;
+	Start = InStart;
+	End = InEnd;
+	bExecutable = InbExecutable;
+	bReadable = InbReadable;
+	bWritable = InbWritable;
 }
 
-bool MemoryRange::Contains(uintptr_t address) const
+bool FMemoryRange::Contains(uintptr_t Address) const
 {
-	return address >= start && address <= end;
+	return Address >= Start && Address <= End;
 }
 
-uintptr_t MemoryRange::Size() const
+uintptr_t FMemoryRange::Size() const
 {
-	return end - start;
+	return End - Start;
 }
 
-void MemoryMap::Setup(Process* process)
+void FMemoryMap::Setup(FProcess* process)
 {
 	// Get readable memory ranges
-	MEMORY_BASIC_INFORMATION mbi;
-	for (uintptr_t address = 0; VirtualQueryEx(process->hProcess, (LPCVOID)address, &mbi, sizeof(mbi)); address += mbi.RegionSize)
+	MEMORY_BASIC_INFORMATION MBI;
+	for (uintptr_t Address = 0; VirtualQueryEx(process->ProcessHandle, (LPCVOID)Address, &MBI, sizeof(MBI)); Address += MBI.RegionSize)
 	{
-		if (mbi.State == MEM_COMMIT && (mbi.Protect & PAGE_READWRITE || mbi.Protect & PAGE_EXECUTE_READWRITE))
+		if (MBI.State == MEM_COMMIT && (MBI.Protect & PAGE_READWRITE || MBI.Protect & PAGE_EXECUTE_READWRITE))
 		{
-			ranges.push_back(
-				MemoryRange(
-					(uintptr_t)mbi.BaseAddress,
-					(uintptr_t)mbi.BaseAddress + mbi.RegionSize,
-					mbi.Protect & PAGE_EXECUTE,
-					mbi.Protect & PAGE_READONLY,
-					mbi.Protect & PAGE_READWRITE));
+			Ranges.push_back(
+				FMemoryRange(
+					(uintptr_t)MBI.BaseAddress,
+					(uintptr_t)MBI.BaseAddress + MBI.RegionSize,
+					MBI.Protect & PAGE_EXECUTE,
+					MBI.Protect & PAGE_READONLY,
+					MBI.Protect & PAGE_READWRITE));
 		}
 	}
-	if (ranges.size() == 0)
+	if (Ranges.size() == 0)
 	{
 		ClassDumper3::LogF("Failed to get memory ranges error code: %u", GetLastError());
 
@@ -383,11 +383,11 @@ uintptr_t ModuleSection::Size() const
 	return end - start;
 }
 
-void ModuleMap::Setup(Process* process)
+void FModuleMap::Setup(FProcess* process)
 {
 	MODULEENTRY32 me32;
 	me32.dwSize = sizeof(MODULEENTRY32);
-	HANDLE hModuleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, process->dwProcessID);
+	HANDLE hModuleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, process->PID);
 	if (hModuleSnap == INVALID_HANDLE_VALUE)
 	{
 		ClassDumper3::Log("Failed to create snapshot");
@@ -401,21 +401,21 @@ void ModuleMap::Setup(Process* process)
 	}
 	do
 	{
-		modules.push_back(Module());
-		Module& module = modules.back();
-		module.baseAddress = me32.modBaseAddr;
-		module.name = me32.szModule;
+		Modules.push_back(FModule());
+		FModule& Module = Modules.back();
+		Module.baseAddress = me32.modBaseAddr;
+		Module.name = me32.szModule;
 		IMAGE_DOS_HEADER dosHeader;
-		ReadProcessMemory(process->hProcess, me32.modBaseAddr, &dosHeader, sizeof(dosHeader), nullptr);
+		ReadProcessMemory(process->ProcessHandle, me32.modBaseAddr, &dosHeader, sizeof(dosHeader), nullptr);
 		IMAGE_NT_HEADERS ntHeaders;
-		ReadProcessMemory(process->hProcess, (void*)((uintptr_t)me32.modBaseAddr + dosHeader.e_lfanew), &ntHeaders, sizeof(ntHeaders), nullptr);
+		ReadProcessMemory(process->ProcessHandle, (void*)((uintptr_t)me32.modBaseAddr + dosHeader.e_lfanew), &ntHeaders, sizeof(ntHeaders), nullptr);
 		IMAGE_SECTION_HEADER* sectionHeaders = new IMAGE_SECTION_HEADER[ntHeaders.FileHeader.NumberOfSections];
-		ReadProcessMemory(process->hProcess, (void*)((uintptr_t)me32.modBaseAddr + dosHeader.e_lfanew + sizeof(IMAGE_NT_HEADERS)), sectionHeaders, sizeof(IMAGE_SECTION_HEADER) * ntHeaders.FileHeader.NumberOfSections, nullptr);
+		ReadProcessMemory(process->ProcessHandle, (void*)((uintptr_t)me32.modBaseAddr + dosHeader.e_lfanew + sizeof(IMAGE_NT_HEADERS)), sectionHeaders, sizeof(IMAGE_SECTION_HEADER) * ntHeaders.FileHeader.NumberOfSections, nullptr);
 		for (int i = 0; i < ntHeaders.FileHeader.NumberOfSections; i++)
 		{
 			IMAGE_SECTION_HEADER& sectionHeader = sectionHeaders[i];
-			module.sections.push_back(ModuleSection());
-			ModuleSection& section = module.sections.back();
+			Module.sections.push_back(ModuleSection());
+			ModuleSection& section = Module.sections.back();
 			section.name = (char*)sectionHeader.Name;
 			section.start = (uintptr_t)me32.modBaseAddr + sectionHeader.VirtualAddress;
 			section.end = section.start + sectionHeader.Misc.VirtualSize;
@@ -425,67 +425,67 @@ void ModuleMap::Setup(Process* process)
 	} while (Module32Next(hModuleSnap, &me32));
 	CloseHandle(hModuleSnap);
 
-	ClassDumper3::LogF("Found %d modules", modules.size());
+	ClassDumper3::LogF("Found %d modules", Modules.size());
 }
 
-Module* ModuleMap::GetModule(const char* name)
+FModule* FModuleMap::GetModule(const char* name)
 {
-	auto it = std::find_if(modules.begin(), modules.end(), [name](const Module& module) { return module.name == name; });
-	if (it != modules.end()) return &*it;
+	auto it = std::find_if(Modules.begin(), Modules.end(), [name](const FModule& module) { return module.name == name; });
+	if (it != Modules.end()) return &*it;
 	return nullptr;
 }
 
-Module* ModuleMap::GetModule(const std::string& name)
+FModule* FModuleMap::GetModule(const std::string& name)
 {
-	auto it = std::find_if(modules.begin(), modules.end(), [name](const Module& module) { return module.name == name; });
-	if (it != modules.end()) return &*it;
+	auto it = std::find_if(Modules.begin(), Modules.end(), [name](const FModule& module) { return module.name == name; });
+	if (it != Modules.end()) return &*it;
 	return nullptr;
 }
 
-Module* ModuleMap::GetModule(uintptr_t address)
+FModule* FModuleMap::GetModule(uintptr_t address)
 {
-	auto it = std::find_if(modules.begin(), modules.end(), [address](const Module& module)
+	auto it = std::find_if(Modules.begin(), Modules.end(), [address](const FModule& module)
 		{
 			return address >= (uintptr_t)module.baseAddress && address <= (uintptr_t)module.baseAddress + module.sections.back().end;
 		});
-	if (it != modules.end()) return &*it;
+	if (it != Modules.end()) return &*it;
 	return nullptr;
 }
 
-void TargetProcess::Setup(const std::string& processName)
+void FTargetProcess::Setup(const std::string& processName)
 {
-	process = Process(processName);
+	process = FProcess(processName);
 	memoryMap.Setup(&process);
 	moduleMap.Setup(&process);
 }
 
-void TargetProcess::Setup(DWORD processID)
+void FTargetProcess::Setup(DWORD processID)
 {
-	process = Process(processID);
+	process = FProcess(processID);
 	memoryMap.Setup(&process);
 	moduleMap.Setup(&process);
 }
 
-void TargetProcess::Setup(Process process)
+void FTargetProcess::Setup(FProcess process)
 {
 	this->process = process;
 	memoryMap.Setup(&process);
 	moduleMap.Setup(&process);
 }
 
-bool TargetProcess::Is64Bit()
+bool FTargetProcess::Is64Bit()
 {
 	return !process.Is32Bit();
 }
 
-bool TargetProcess::IsValid()
+bool FTargetProcess::IsValid()
 {
 	return process.IsValid();
 }
 
-Module* TargetProcess::GetModule(const std::string& moduleName)
+FModule* FTargetProcess::GetModule(const std::string& moduleName)
 {
-	for (auto& module : moduleMap.modules)
+	for (auto& module : moduleMap.Modules)
 	{
 		if (module.name.find(moduleName) != std::string::npos)
 		{
@@ -495,7 +495,7 @@ Module* TargetProcess::GetModule(const std::string& moduleName)
 	return nullptr;
 };
 
-MemoryRange* TargetProcess::GetMemoryRange(uintptr_t address)
+FMemoryRange* FTargetProcess::GetMemoryRange(uintptr_t address)
 {
 	for (auto& range : memoryMap.ranges)
 	{
@@ -508,7 +508,7 @@ MemoryRange* TargetProcess::GetMemoryRange(uintptr_t address)
 	return nullptr;
 }
 
-std::vector<MemoryBlock> TargetProcess::GetReadableMemory()
+std::vector<MemoryBlock> FTargetProcess::GetReadableMemory()
 {
 	std::vector<std::future<MemoryBlock>> futures;
 	std::vector<MemoryBlock> blocks;
@@ -520,10 +520,10 @@ std::vector<MemoryBlock> TargetProcess::GetReadableMemory()
 			auto future = std::async(std::launch::async, [&range, &process = process]()
 				{
 					MemoryBlock block;
-					block.blockAddress = (void*)range.start;
+					block.blockAddress = (void*)range.Start;
 					block.blockSize = range.Size();
 					block.blockCopy = malloc(block.blockSize);
-					ReadProcessMemory(process.hProcess, block.blockAddress, block.blockCopy, block.blockSize, NULL);
+					ReadProcessMemory(process.ProcessHandle, block.blockAddress, block.blockCopy, block.blockSize, NULL);
 					return block;
 				});
 			futures.push_back(std::move(future));
@@ -539,7 +539,7 @@ std::vector<MemoryBlock> TargetProcess::GetReadableMemory()
 	return blocks;
 }
 
-std::vector<std::future<MemoryBlock>> TargetProcess::AsyncGetReadableMemory()
+std::vector<std::future<MemoryBlock>> FTargetProcess::AsyncGetReadableMemory()
 {
 	std::vector<std::future<MemoryBlock>> futures;
 	for (auto& range : memoryMap.ranges)
@@ -550,10 +550,10 @@ std::vector<std::future<MemoryBlock>> TargetProcess::AsyncGetReadableMemory()
 			auto future = std::async(std::launch::async, [&range, &process = process]()
 				{
 					MemoryBlock block;
-					block.blockAddress = (void*)range.start;
+					block.blockAddress = (void*)range.Start;
 					block.blockSize = range.Size();
 					block.blockCopy = malloc(block.blockSize);
-					ReadProcessMemory(process.hProcess, block.blockAddress, block.blockCopy, block.blockSize, NULL);
+					ReadProcessMemory(process.ProcessHandle, block.blockAddress, block.blockCopy, block.blockSize, NULL);
 					return block;
 				});
 			futures.push_back(std::move(future));
@@ -562,9 +562,9 @@ std::vector<std::future<MemoryBlock>> TargetProcess::AsyncGetReadableMemory()
 	return futures;
 }
 
-ModuleSection* TargetProcess::GetModuleSection(uintptr_t address)
+ModuleSection* FTargetProcess::GetModuleSection(uintptr_t address)
 {
-	for (auto& module : moduleMap.modules)
+	for (auto& module : moduleMap.Modules)
 	{
 		for (auto& section : module.sections)
 		{
@@ -578,14 +578,14 @@ ModuleSection* TargetProcess::GetModuleSection(uintptr_t address)
 }
 
 
-DWORD TargetProcess::SetProtection(uintptr_t address, size_t size, DWORD protection)
+DWORD FTargetProcess::SetProtection(uintptr_t address, size_t size, DWORD protection)
 {
 	DWORD oldProtection;
-	VirtualProtectEx(process.hProcess, (void*)address, size, protection, &oldProtection);
+	VirtualProtectEx(process.ProcessHandle, (void*)address, size, protection, &oldProtection);
 	return oldProtection;
 }
 
-std::vector<HWND> TargetProcess::GetWindows()
+std::vector<HWND> FTargetProcess::GetWindows()
 {
 	std::vector<HWND> windowsTemp;
 	std::vector<HWND> windowsFinal;
@@ -599,7 +599,7 @@ std::vector<HWND> TargetProcess::GetWindows()
 	{
 		DWORD processID;
 		GetWindowThreadProcessId(window, &processID);
-		if (processID == process.dwProcessID)
+		if (processID == process.PID)
 		{
 			windowsFinal.push_back(window);
 		}
@@ -608,65 +608,65 @@ std::vector<HWND> TargetProcess::GetWindows()
 	return windowsFinal;
 }
 
-std::string TargetProcess::GetWindowName(HWND window)
+std::string FTargetProcess::GetWindowName(HWND window)
 {
 	char buffer[256];
 	GetWindowTextA(window, buffer, 256);
 	return std::string(buffer);
 }
 
-bool TargetProcess::SetWindowName(HWND window, const std::string& name)
+bool FTargetProcess::SetWindowName(HWND window, const std::string& name)
 {
 	return SetWindowTextA(window, name.c_str());
 }
 
-bool TargetProcess::SetTransparency(HWND window, BYTE alpha)
+bool FTargetProcess::SetTransparency(HWND window, BYTE alpha)
 {
 	return SetLayeredWindowAttributes(window, 0, alpha, LWA_ALPHA);
 }
 
-void TargetProcess::Read(uintptr_t address, void* buffer, size_t size)
+void FTargetProcess::Read(uintptr_t address, void* buffer, size_t size)
 {
-	if (!ReadProcessMemory(process.hProcess, (void*)address, buffer, size, NULL))
+	if (!ReadProcessMemory(process.ProcessHandle, (void*)address, buffer, size, NULL))
 	{
 		printf("ReadProcessMemory failed: %d\n", GetLastError());
 	}
 }
 
-std::future<void*> TargetProcess::AsyncRead(uintptr_t address, size_t size)
+std::future<void*> FTargetProcess::AsyncRead(uintptr_t address, size_t size)
 {
 	return std::async(std::launch::async, [this, address, size]()
 		{
 			void* buffer = malloc(size);
-			ReadProcessMemory(process.hProcess, (void*)address, buffer, size, NULL);
+			ReadProcessMemory(process.ProcessHandle, (void*)address, buffer, size, NULL);
 			return buffer;
 		});
 }
 
-void TargetProcess::Write(uintptr_t address, void* buffer, size_t size)
+void FTargetProcess::Write(uintptr_t address, void* buffer, size_t size)
 {
-	WriteProcessMemory(process.hProcess, (void*)address, buffer, size, NULL);
+	WriteProcessMemory(process.ProcessHandle, (void*)address, buffer, size, NULL);
 }
 
-void TargetProcess::AsyncWrite(uintptr_t address, void* buffer, size_t size)
+void FTargetProcess::AsyncWrite(uintptr_t address, void* buffer, size_t size)
 {
 	auto result = std::async(std::launch::async, [this, address, buffer, size]()
 		{
-			WriteProcessMemory(process.hProcess, (void*)address, buffer, size, NULL);
+			WriteProcessMemory(process.ProcessHandle, (void*)address, buffer, size, NULL);
 		});
 }
 
-HANDLE TargetProcess::InjectDLL(const std::string& dllPath)
+HANDLE FTargetProcess::InjectDLL(const std::string& dllPath)
 {
 	HANDLE hThread = NULL;
 	LPVOID LoadLibraryAAddr = (LPVOID)GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryA");
-	LPVOID RemoteString = (LPVOID)VirtualAllocEx(process.hProcess, NULL, dllPath.size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-	WriteProcessMemory(process.hProcess, (LPVOID)RemoteString, dllPath.c_str(), dllPath.size(), NULL);
-	hThread = CreateRemoteThread(process.hProcess, NULL, NULL, (LPTHREAD_START_ROUTINE)LoadLibraryAAddr, (LPVOID)RemoteString, NULL, NULL);
+	LPVOID RemoteString = (LPVOID)VirtualAllocEx(process.ProcessHandle, NULL, dllPath.size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	WriteProcessMemory(process.ProcessHandle, (LPVOID)RemoteString, dllPath.c_str(), dllPath.size(), NULL);
+	hThread = CreateRemoteThread(process.ProcessHandle, NULL, NULL, (LPTHREAD_START_ROUTINE)LoadLibraryAAddr, (LPVOID)RemoteString, NULL, NULL);
 	return hThread;
 }
 
-void TargetProcess::InjectDLLAsync(const std::string& dllPath)
+void FTargetProcess::InjectDLLAsync(const std::string& dllPath)
 {
 	auto result = std::async(std::launch::async, [this, dllPath]()
 		{

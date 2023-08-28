@@ -2,20 +2,20 @@
 #include "../Util/Strings.h"
 #include "../ClassDumper3.h"
 
-RTTI::RTTI(TargetProcess* process, std::string moduleName)
+RTTI::RTTI(FTargetProcess* InProcess, std::string InModuleName)
 {
-	this->process = process;
-	module = process->moduleMap.GetModule(moduleName);
-	this->moduleName = moduleName;
+	Process = InProcess;
+	Module = Process->moduleMap.GetModule(InModuleName);
+	ModuleName = InModuleName;
 	
-	if (process->Is64Bit())
+	if (Process->Is64Bit())
 	{
-		moduleBase = (uintptr_t)module->baseAddress;
+		ModuleBase = (uintptr_t)Module->baseAddress;
 	}
 	else
 	{
 		// dont use the base address as 32 bits uses direct addresses instead of offsets
-		moduleBase = 0;
+		ModuleBase = 0;
 	}
 }
 
@@ -121,7 +121,7 @@ void RTTI::FindValidSections()
 	bool bFound1 = false;
 	bool bFound2 = false;
 	// find valid executable or read only sections
-	for (auto& section : module->sections)
+	for (auto& section : Module->sections)
 	{
 		if (section.bFlagExecutable)
 		{
@@ -197,7 +197,7 @@ void RTTI::ScanForClasses()
 
 		
 		memset(buffer, 0, TotalSectionSize);
-		process->Read(section.start, buffer, sectionSize);
+		Process->Read(section.start, buffer, sectionSize);
 
 		
 		for (size_t i = 0; i < max; i++)
@@ -218,7 +218,7 @@ void RTTI::ScanForClasses()
 	}
 	
 	free(buffer);
-	ClassDumper3::LogF("Found %u potential classes in %s\n", PotentialClasses.size(), moduleName.c_str()); 
+	ClassDumper3::LogF("Found %u potential classes in %s\n", PotentialClasses.size(), ModuleName.c_str()); 
 	
 	PotentialClassesFinal.reserve(PotentialClasses.size());
 	Classes.reserve(PotentialClasses.size());
@@ -227,11 +227,11 @@ void RTTI::ScanForClasses()
 void RTTI::ValidateClasses()
 {
 	SetLoadingStage("Validating classes...");
-	bool bUse64bit = process->Is64Bit();
+	bool bUse64bit = Process->Is64Bit();
 	for (PotentialClass& c : PotentialClasses)
 	{
 		RTTICompleteObjectLocator col;
-		process->Read(c.CompleteObjectLocator, &col, sizeof(RTTICompleteObjectLocator));
+		Process->Read(c.CompleteObjectLocator, &col, sizeof(RTTICompleteObjectLocator));
 
 		if (bUse64bit)
 		{
@@ -248,7 +248,7 @@ void RTTI::ValidateClasses()
 			}
 		}
 
-		uintptr_t pTypeDescriptor = col.pTypeDescriptor + moduleBase;
+		uintptr_t pTypeDescriptor = col.pTypeDescriptor + ModuleBase;
 
 		if (!IsInReadOnlySection(pTypeDescriptor))
 		{
@@ -256,7 +256,7 @@ void RTTI::ValidateClasses()
 		}
 
 		RTTITypeDescriptor td;
-		process->Read(pTypeDescriptor, &td, sizeof(RTTITypeDescriptor));
+		Process->Read(pTypeDescriptor, &td, sizeof(RTTITypeDescriptor));
 
 		if (!IsInReadOnlySection(td.pVFTable))
 		{
@@ -264,7 +264,7 @@ void RTTI::ValidateClasses()
 		}
 
 		char Name[bufferSize];
-		process->Read(pTypeDescriptor + offsetof(RTTITypeDescriptor, name), Name, bufferSize);
+		Process->Read(pTypeDescriptor + offsetof(RTTITypeDescriptor, name), Name, bufferSize);
 		c.DemangledName = DemangleMSVC(Name);
 
 		PotentialClassesFinal.push_back(c);
@@ -275,7 +275,7 @@ void RTTI::ValidateClasses()
 	SortClasses();
 	ProcessClasses();
 
-	ClassDumper3::LogF("Found %u valid classes in %s\n", Classes.size(), moduleName.c_str());
+	ClassDumper3::LogF("Found %u valid classes in %s\n", Classes.size(), ModuleName.c_str());
 }
 
 void RTTI::ProcessClasses()
@@ -286,20 +286,20 @@ void RTTI::ProcessClasses()
 	for (PotentialClass& c : PotentialClassesFinal)
 	{
 		RTTICompleteObjectLocator col;
-		process->Read(c.CompleteObjectLocator, &col, sizeof(RTTICompleteObjectLocator));
+		Process->Read(c.CompleteObjectLocator, &col, sizeof(RTTICompleteObjectLocator));
 		RTTIClassHierarchyDescriptor chd;
 
-		uintptr_t pClassDescriptor = col.pClassDescriptor + moduleBase;
-		process->Read(pClassDescriptor, &chd, sizeof(RTTIClassHierarchyDescriptor));
+		uintptr_t pClassDescriptor = col.pClassDescriptor + ModuleBase;
+		Process->Read(pClassDescriptor, &chd, sizeof(RTTIClassHierarchyDescriptor));
 
-		uintptr_t pTypeDescriptor = col.pTypeDescriptor + moduleBase;
+		uintptr_t pTypeDescriptor = col.pTypeDescriptor + ModuleBase;
 
 		std::shared_ptr<_Class> ValidClass = std::make_shared<_Class>();
 		ValidClass->CompleteObjectLocator = c.CompleteObjectLocator;
 		ValidClass->VTable = c.VTable;
 		char name[bufferSize];
 		memset(name, 0, bufferSize);
-		process->Read(pTypeDescriptor + offsetof(RTTITypeDescriptor, name), name, bufferSize);
+		Process->Read(pTypeDescriptor + offsetof(RTTITypeDescriptor, name), name, bufferSize);
 		name[bufferSize - 1] = 0;
 		ValidClass->MangledName = name;
 		ValidClass->Name = DemangleMSVC(name);
@@ -364,17 +364,17 @@ void RTTI::ProcessClasses()
 			std::vector<uintptr_t> baseClasses;
 			baseClasses.reserve(c->numBaseClasses);
 			RTTICompleteObjectLocator col;
-			process->Read(c->CompleteObjectLocator, &col, sizeof(RTTICompleteObjectLocator));
+			Process->Read(c->CompleteObjectLocator, &col, sizeof(RTTICompleteObjectLocator));
 
 			RTTIClassHierarchyDescriptor chd;
-			uintptr_t pClassDescriptor = col.pClassDescriptor + moduleBase;
-			process->Read(pClassDescriptor, &chd, sizeof(RTTIClassHierarchyDescriptor));
-			uintptr_t pBaseClassArray = chd.pBaseClassArray + moduleBase;
-			process->Read(pBaseClassArray, baseClassArray.get(), sizeof(uintptr_t) * c->numBaseClasses - 1);
+			uintptr_t pClassDescriptor = col.pClassDescriptor + ModuleBase;
+			Process->Read(pClassDescriptor, &chd, sizeof(RTTIClassHierarchyDescriptor));
+			uintptr_t pBaseClassArray = chd.pBaseClassArray + ModuleBase;
+			Process->Read(pBaseClassArray, baseClassArray.get(), sizeof(uintptr_t) * c->numBaseClasses - 1);
 
 			for (unsigned int i = 0; i < c->numBaseClasses - 1; i++)
 			{
-				baseClasses.push_back(baseClassArray[i] + moduleBase);
+				baseClasses.push_back(baseClassArray[i] + ModuleBase);
 			}
 
 			DWORD lastdisplacement = 0;
@@ -384,11 +384,11 @@ void RTTI::ProcessClasses()
 			{
 				RTTIBaseClassDescriptor bcd;
 				std::shared_ptr<_ParentClassNode> node = std::make_shared<_ParentClassNode>();
-				process->Read(baseClasses[i], &bcd, sizeof(RTTIBaseClassDescriptor));
+				Process->Read(baseClasses[i], &bcd, sizeof(RTTIBaseClassDescriptor));
 
 				// process child name
 				char name[bufferSize];
-				process->Read((uintptr_t)bcd.pTypeDescriptor + moduleBase + offsetof(RTTITypeDescriptor, name), name, bufferSize);
+				Process->Read((uintptr_t)bcd.pTypeDescriptor + ModuleBase + offsetof(RTTITypeDescriptor, name), name, bufferSize);
 				name[bufferSize - 1] = 0;
 				node->MangledName = name;
 				node->Name = DemangleMSVC(name);
@@ -432,7 +432,7 @@ void RTTI::EnumerateVirtualFunctions(std::shared_ptr<_Class>& c)
 	
 	c->Functions.clear();
 	
-	process->Read(c->VTable, buffer.get(), maxVFuncs);
+	Process->Read(c->VTable, buffer.get(), maxVFuncs);
 	for (size_t i = 0; i < maxVFuncs / sizeof(uintptr_t); i++)
 	{
 		if (buffer[i] == 0)

@@ -56,17 +56,17 @@ void MainWindow::DrawProcessList()
 	{
 		for (unsigned int n = 0; n < ProcessList.size(); n++)
 		{
-			bool is_selected = (selectedProcessName == ProcessList[n].name);
-			if (ImGui::Selectable(ProcessList[n].name.c_str(), is_selected))
+			bool is_selected = (selectedProcessName == ProcessList[n].Name);
+			if (ImGui::Selectable(ProcessList[n].Name.c_str(), is_selected))
 			{
-				Target = std::make_shared<TargetProcess>();
-				Target->Setup(ProcessList[n].pid);
+				Target = std::make_shared<FTargetProcess>();
+				Target->Setup(ProcessList[n].PID);
 				if (!Target->IsValid())
 				{
 					Target.reset();
 					break;
 				}
-				selectedProcessName = ProcessList[n].name;
+				selectedProcessName = ProcessList[n].Name;
 			}
 		}
 		ImGui::EndCombo();
@@ -149,19 +149,21 @@ void MainWindow::DrawClassList()
 
 void MainWindow::DrawClass(const std::shared_ptr<_Class>& cl)
 {
-	if (cl == SelectedClass)
+	std::shared_ptr<_Class> SelectedClassLocked = SelectedClass.lock();
+
+	if (SelectedClassLocked && SelectedClassLocked->VTable == cl->VTable)
 	{
-		ImGui::PushStyleColor(ImGuiCol_Text, {255, 0, 0, 255});
+		ImGui::PushStyleColor(ImGuiCol_Text, { 0, 255, 0, 255 });
 		ImGui::Text(cl->FormattedName.c_str());
 		ImGui::PopStyleColor(1);
+		return;
 	}
-	else 
+	
+	ImGui::Text(cl->FormattedName.c_str());
+	if (ImGui::IsItemClicked(0))
 	{
-		ImGui::Text(cl->FormattedName.c_str());
-		if(ImGui::IsItemClicked(0))
-		{
-			OnClassSelected(cl);
-			SelectedClass = cl;
-		}
+		OnClassSelected(cl);
+		SelectedClass = cl;
 	}
+	
 }

@@ -103,9 +103,9 @@ struct FModuleSection
 
 struct FModule
 {
-	void* baseAddress = nullptr;
-	std::vector<FModuleSection> sections;
-	std::string name;
+	void* BaseAddress = nullptr;
+	std::vector<FModuleSection> Sections;
+	std::string Name;
 };
 
 struct FModuleMap
@@ -132,13 +132,13 @@ struct MemoryBlock
 
 struct FTargetProcess
 {
-	FProcess process;
-	FMemoryMap memoryMap;
-	FModuleMap moduleMap;
+	FProcess Process;
+	FMemoryMap MemoryMap;
+	FModuleMap ModuleMap;
 
-	void Setup(const std::string& processName);
-	void Setup(DWORD processID);
-	void Setup(FProcess process);
+	void Setup(const std::string& InProcessName);
+	void Setup(DWORD InPID);
+	void Setup(const FProcess& InProcess);
 
 	/*********** Process Utils ***********/
 	bool IsValid();
@@ -167,7 +167,7 @@ struct FTargetProcess
 	T Read(uintptr_t address)
 	{
 		T buffer;
-		ReadProcessMemory(process.ProcessHandle, (void*)address, &buffer, sizeof(T), NULL);
+		ReadProcessMemory(Process.ProcessHandle, (void*)address, &buffer, sizeof(T), NULL);
 		return buffer;
 	}
 
@@ -177,7 +177,7 @@ struct FTargetProcess
 		return std::async(std::launch::async, [this, address]()
 			{
 				T buffer;
-				ReadProcessMemory(process.ProcessHandle, (void*)address, &buffer, sizeof(T), NULL);
+				ReadProcessMemory(Process.ProcessHandle, (void*)address, &buffer, sizeof(T), NULL);
 				return buffer;
 			});
 	}
@@ -188,7 +188,7 @@ struct FTargetProcess
 	template<typename T>
 	void Write(uintptr_t address, T value)
 	{
-		WriteProcessMemory(process.ProcessHandle, (void*)address, &value, sizeof(T), NULL);
+		WriteProcessMemory(Process.ProcessHandle, (void*)address, &value, sizeof(T), NULL);
 	}
 
 	HANDLE InjectDLL(const std::string& dllPath);
@@ -205,7 +205,7 @@ public:
 	{
 		this->process = process;
 		this->value = value;
-		this->address = (uintptr_t)VirtualAllocEx(process->process.ProcessHandle, NULL, sizeof(T), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+		this->address = (uintptr_t)VirtualAllocEx(process->Process.ProcessHandle, NULL, sizeof(T), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 		this->Write();
 	}
 
@@ -218,7 +218,7 @@ public:
 
 	~RemoteVariable()
 	{
-		VirtualFreeEx(process->process.ProcessHandle, (void*)address, sizeof(T), MEM_RELEASE);
+		VirtualFreeEx(process->Process.ProcessHandle, (void*)address, sizeof(T), MEM_RELEASE);
 	}
 
 	T operator=(T value)
@@ -386,19 +386,19 @@ public:
 
 	HANDLE operator()()
 	{
-		return CreateRemoteThread(process->process.ProcessHandle, NULL, NULL, (LPTHREAD_START_ROUTINE)address, NULL, NULL, NULL);
+		return CreateRemoteThread(process->Process.ProcessHandle, NULL, NULL, (LPTHREAD_START_ROUTINE)address, NULL, NULL, NULL);
 	}
 
 	HANDLE operator()(void* args)
 	{
-		return CreateRemoteThread(process->process.ProcessHandle, NULL, NULL, (LPTHREAD_START_ROUTINE)address, args, NULL, NULL);
+		return CreateRemoteThread(process->Process.ProcessHandle, NULL, NULL, (LPTHREAD_START_ROUTINE)address, args, NULL, NULL);
 	}
 
 	// function to allocate arguments for injected code, its up to the injected code to unpack the arguments if it is a struct
 	template<typename T>
 	void* AllocArgs(T args)
 	{
-		void* argsAddress = VirtualAllocEx(process->process.ProcessHandle, NULL, sizeof(T), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+		void* argsAddress = VirtualAllocEx(process->Process.ProcessHandle, NULL, sizeof(T), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 		process->Write(argsAddress, &args, sizeof(T));
 		return argsAddress;
 	};
@@ -407,7 +407,7 @@ public:
 	void WaitAndFreeArgs(void* argsAddress, HANDLE hThread)
 	{
 		WaitForSingleObject(hThread.Get(), INFINITE);
-		VirtualFreeEx(process->process.ProcessHandle, argsAddress, sizeof(T), MEM_RELEASE);
+		VirtualFreeEx(process->Process.ProcessHandle, argsAddress, sizeof(T), MEM_RELEASE);
 	}
 
 private:

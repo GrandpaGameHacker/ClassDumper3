@@ -126,8 +126,8 @@ public:
 
 protected:
 	void FindValidSections();
-	bool IsInExecutableSection(uintptr_t address);
-	bool IsInReadOnlySection(uintptr_t address);
+	bool IsInExecutableSection(uintptr_t Address);
+	bool IsInReadOnlySection(uintptr_t Address);
 	
 	void ScanForClasses();
 	void ValidateClasses();

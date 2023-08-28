@@ -346,59 +346,59 @@ uintptr_t FModuleSection::Size() const
 
 void FModuleMap::Setup(FProcess* process)
 {
-	MODULEENTRY32 me32;
-	me32.dwSize = sizeof(MODULEENTRY32);
-	HANDLE hModuleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, process->PID);
-	if (hModuleSnap == INVALID_HANDLE_VALUE)
+	MODULEENTRY32 ModuleEntry;
+	ModuleEntry.dwSize = sizeof(MODULEENTRY32);
+	HANDLE ModuleSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, process->PID);
+	if (ModuleSnapshotHandle == INVALID_HANDLE_VALUE)
 	{
 		ClassDumper3::Log("Failed to create snapshot");
 		return;
 	}
-	if (!Module32First(hModuleSnap, &me32))
+	if (!Module32First(ModuleSnapshotHandle, &ModuleEntry))
 	{
 		ClassDumper3::Log("Failed to get first module");
-		CloseHandle(hModuleSnap);
+		CloseHandle(ModuleSnapshotHandle);
 		return;
 	}
 	do
 	{
 		Modules.push_back(FModule());
 		FModule& Module = Modules.back();
-		Module.baseAddress = me32.modBaseAddr;
-		Module.name = me32.szModule;
+		Module.BaseAddress = ModuleEntry.modBaseAddr;
+		Module.Name = ModuleEntry.szModule;
 		IMAGE_DOS_HEADER dosHeader;
-		ReadProcessMemory(process->ProcessHandle, me32.modBaseAddr, &dosHeader, sizeof(dosHeader), nullptr);
+		ReadProcessMemory(process->ProcessHandle, ModuleEntry.modBaseAddr, &dosHeader, sizeof(dosHeader), nullptr);
 		IMAGE_NT_HEADERS ntHeaders;
-		ReadProcessMemory(process->ProcessHandle, (void*)((uintptr_t)me32.modBaseAddr + dosHeader.e_lfanew), &ntHeaders, sizeof(ntHeaders), nullptr);
+		ReadProcessMemory(process->ProcessHandle, (void*)((uintptr_t)ModuleEntry.modBaseAddr + dosHeader.e_lfanew), &ntHeaders, sizeof(ntHeaders), nullptr);
 		IMAGE_SECTION_HEADER* sectionHeaders = new IMAGE_SECTION_HEADER[ntHeaders.FileHeader.NumberOfSections];
-		ReadProcessMemory(process->ProcessHandle, (void*)((uintptr_t)me32.modBaseAddr + dosHeader.e_lfanew + sizeof(IMAGE_NT_HEADERS)), sectionHeaders, sizeof(IMAGE_SECTION_HEADER) * ntHeaders.FileHeader.NumberOfSections, nullptr);
+		ReadProcessMemory(process->ProcessHandle, (void*)((uintptr_t)ModuleEntry.modBaseAddr + dosHeader.e_lfanew + sizeof(IMAGE_NT_HEADERS)), sectionHeaders, sizeof(IMAGE_SECTION_HEADER) * ntHeaders.FileHeader.NumberOfSections, nullptr);
 		for (int i = 0; i < ntHeaders.FileHeader.NumberOfSections; i++)
 		{
 			IMAGE_SECTION_HEADER& sectionHeader = sectionHeaders[i];
-			Module.sections.push_back(FModuleSection());
-			FModuleSection& section = Module.sections.back();
+			Module.Sections.push_back(FModuleSection());
+			FModuleSection& section = Module.Sections.back();
 			section.Name = (char*)sectionHeader.Name;
-			section.Start = (uintptr_t)me32.modBaseAddr + sectionHeader.VirtualAddress;
+			section.Start = (uintptr_t)ModuleEntry.modBaseAddr + sectionHeader.VirtualAddress;
 			section.End = section.Start + sectionHeader.Misc.VirtualSize;
 			section.bFlagExecutable = sectionHeader.Characteristics & IMAGE_SCN_MEM_EXECUTE;
 			section.bFlagReadonly = sectionHeader.Characteristics & IMAGE_SCN_MEM_READ;
 		}
-	} while (Module32Next(hModuleSnap, &me32));
-	CloseHandle(hModuleSnap);
+	} while (Module32Next(ModuleSnapshotHandle, &ModuleEntry));
+	CloseHandle(ModuleSnapshotHandle);
 
 	ClassDumper3::LogF("Found %d modules", Modules.size());
 }
 
 FModule* FModuleMap::GetModule(const char* name)
 {
-	auto it = std::find_if(Modules.begin(), Modules.end(), [name](const FModule& module) { return module.name == name; });
+	auto it = std::find_if(Modules.begin(), Modules.end(), [name](const FModule& module) { return module.Name == name; });
 	if (it != Modules.end()) return &*it;
 	return nullptr;
 }
 
 FModule* FModuleMap::GetModule(const std::string& name)
 {
-	auto it = std::find_if(Modules.begin(), Modules.end(), [name](const FModule& module) { return module.name == name; });
+	auto it = std::find_if(Modules.begin(), Modules.end(), [name](const FModule& module) { return module.Name == name; });
 	if (it != Modules.end()) return &*it;
 	return nullptr;
 }
@@ -407,57 +407,57 @@ FModule* FModuleMap::GetModule(uintptr_t address)
 {
 	auto it = std::find_if(Modules.begin(), Modules.end(), [address](const FModule& module)
 		{
-			return address >= (uintptr_t)module.baseAddress && address <= (uintptr_t)module.baseAddress + module.sections.back().End;
+			return address >= (uintptr_t)module.BaseAddress && address <= (uintptr_t)module.BaseAddress + module.Sections.back().End;
 		});
 	if (it != Modules.end()) return &*it;
 	return nullptr;
 }
 
-void FTargetProcess::Setup(const std::string& processName)
+void FTargetProcess::Setup(const std::string& InProcessName)
 {
-	process = FProcess(processName);
-	memoryMap.Setup(&process);
-	moduleMap.Setup(&process);
+	Process = FProcess(InProcessName);
+	MemoryMap.Setup(&Process);
+	ModuleMap.Setup(&Process);
 }
 
-void FTargetProcess::Setup(DWORD processID)
+void FTargetProcess::Setup(DWORD InPID)
 {
-	process = FProcess(processID);
-	memoryMap.Setup(&process);
-	moduleMap.Setup(&process);
+	Process = FProcess(InPID);
+	MemoryMap.Setup(&Process);
+	ModuleMap.Setup(&Process);
 }
 
-void FTargetProcess::Setup(FProcess process)
+void FTargetProcess::Setup(const FProcess& InProcess)
 {
-	this->process = process;
-	memoryMap.Setup(&process);
-	moduleMap.Setup(&process);
+	Process = InProcess;
+	MemoryMap.Setup(&Process);
+	ModuleMap.Setup(&Process);
 }
 
 bool FTargetProcess::IsValid()
 {
-	return process.IsValid();
+	return Process.IsValid();
 }
 
 FModule* FTargetProcess::GetModule(const std::string& moduleName)
 {
-	for (auto& module : moduleMap.Modules)
+	for (auto& Module : ModuleMap.Modules)
 	{
-		if (module.name.find(moduleName) != std::string::npos)
+		if (Module.Name.find(moduleName) != std::string::npos)
 		{
-			return &module;
+			return &Module;
 		}
 	}
 	return nullptr;
 };
 
-FMemoryRange* FTargetProcess::GetMemoryRange(uintptr_t address)
+FMemoryRange* FTargetProcess::GetMemoryRange(uintptr_t Address)
 {
-	for (auto& range : memoryMap.Ranges)
+	for (auto& Range : MemoryMap.Ranges)
 	{
-		if (range.Contains(address))
+		if (Range.Contains(Address))
 		{
-			return &range;
+			return &Range;
 		}
 	}
 
@@ -468,18 +468,18 @@ std::vector<MemoryBlock> FTargetProcess::GetReadableMemory()
 {
 	std::vector<std::future<MemoryBlock>> futures;
 	std::vector<MemoryBlock> blocks;
-	for (auto& range : memoryMap.Ranges)
+	for (auto& Range : MemoryMap.Ranges)
 	{
-		if (range.bReadable)
+		if (Range.bReadable)
 		{
 			// get a future using async launch lambda
-			auto future = std::async(std::launch::async, [&range, &process = process]()
+			auto future = std::async(std::launch::async, [&Range, &Process = Process]()
 				{
 					MemoryBlock block;
-					block.blockAddress = (void*)range.Start;
-					block.blockSize = range.Size();
+					block.blockAddress = (void*)Range.Start;
+					block.blockSize = Range.Size();
 					block.blockCopy = malloc(block.blockSize);
-					ReadProcessMemory(process.ProcessHandle, block.blockAddress, block.blockCopy, block.blockSize, NULL);
+					ReadProcessMemory(Process.ProcessHandle, block.blockAddress, block.blockCopy, block.blockSize, NULL);
 					return block;
 				});
 			futures.push_back(std::move(future));
@@ -498,18 +498,18 @@ std::vector<MemoryBlock> FTargetProcess::GetReadableMemory()
 std::vector<std::future<MemoryBlock>> FTargetProcess::AsyncGetReadableMemory()
 {
 	std::vector<std::future<MemoryBlock>> futures;
-	for (auto& range : memoryMap.Ranges)
+	for (auto& Range : MemoryMap.Ranges)
 	{
-		if (range.bReadable)
+		if (Range.bReadable)
 		{
 			// get a future using async launch lambda
-			auto future = std::async(std::launch::async, [&range, &process = process]()
+			auto future = std::async(std::launch::async, [&Range, &Process = Process]()
 				{
 					MemoryBlock block;
-					block.blockAddress = (void*)range.Start;
-					block.blockSize = range.Size();
+					block.blockAddress = (void*)Range.Start;
+					block.blockSize = Range.Size();
 					block.blockCopy = malloc(block.blockSize);
-					ReadProcessMemory(process.ProcessHandle, block.blockAddress, block.blockCopy, block.blockSize, NULL);
+					ReadProcessMemory(Process.ProcessHandle, block.blockAddress, block.blockCopy, block.blockSize, NULL);
 					return block;
 				});
 			futures.push_back(std::move(future));
@@ -520,13 +520,13 @@ std::vector<std::future<MemoryBlock>> FTargetProcess::AsyncGetReadableMemory()
 
 FModuleSection* FTargetProcess::GetModuleSection(uintptr_t address)
 {
-	for (auto& module : moduleMap.Modules)
+	for (auto& Module : ModuleMap.Modules)
 	{
-		for (auto& section : module.sections)
+		for (auto& Section : Module.Sections)
 		{
-			if (section.Contains(address))
+			if (Section.Contains(address))
 			{
-				return &section;
+				return &Section;
 			}
 		}
 	}
@@ -537,7 +537,7 @@ FModuleSection* FTargetProcess::GetModuleSection(uintptr_t address)
 DWORD FTargetProcess::SetProtection(uintptr_t address, size_t size, DWORD protection)
 {
 	DWORD oldProtection;
-	VirtualProtectEx(process.ProcessHandle, (void*)address, size, protection, &oldProtection);
+	VirtualProtectEx(Process.ProcessHandle, (void*)address, size, protection, &oldProtection);
 	return oldProtection;
 }
 
@@ -555,7 +555,7 @@ std::vector<HWND> FTargetProcess::GetWindows()
 	{
 		DWORD processID;
 		GetWindowThreadProcessId(window, &processID);
-		if (processID == process.PID)
+		if (processID == Process.PID)
 		{
 			windowsFinal.push_back(window);
 		}
@@ -583,7 +583,7 @@ bool FTargetProcess::SetTransparency(HWND window, BYTE alpha)
 
 void FTargetProcess::Read(uintptr_t address, void* buffer, size_t size)
 {
-	if (!ReadProcessMemory(process.ProcessHandle, (void*)address, buffer, size, NULL))
+	if (!ReadProcessMemory(Process.ProcessHandle, (void*)address, buffer, size, NULL))
 	{
 		printf("ReadProcessMemory failed: %d\n", GetLastError());
 	}
@@ -594,21 +594,21 @@ std::future<void*> FTargetProcess::AsyncRead(uintptr_t address, size_t size)
 	return std::async(std::launch::async, [this, address, size]()
 		{
 			void* buffer = malloc(size);
-			ReadProcessMemory(process.ProcessHandle, (void*)address, buffer, size, NULL);
+			ReadProcessMemory(Process.ProcessHandle, (void*)address, buffer, size, NULL);
 			return buffer;
 		});
 }
 
 void FTargetProcess::Write(uintptr_t address, void* buffer, size_t size)
 {
-	WriteProcessMemory(process.ProcessHandle, (void*)address, buffer, size, NULL);
+	WriteProcessMemory(Process.ProcessHandle, (void*)address, buffer, size, NULL);
 }
 
 void FTargetProcess::AsyncWrite(uintptr_t address, void* buffer, size_t size)
 {
 	auto result = std::async(std::launch::async, [this, address, buffer, size]()
 		{
-			WriteProcessMemory(process.ProcessHandle, (void*)address, buffer, size, NULL);
+			WriteProcessMemory(Process.ProcessHandle, (void*)address, buffer, size, NULL);
 		});
 }
 
@@ -616,9 +616,9 @@ HANDLE FTargetProcess::InjectDLL(const std::string& dllPath)
 {
 	HANDLE hThread = NULL;
 	LPVOID LoadLibraryAAddr = (LPVOID)GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryA");
-	LPVOID RemoteString = (LPVOID)VirtualAllocEx(process.ProcessHandle, NULL, dllPath.size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-	WriteProcessMemory(process.ProcessHandle, (LPVOID)RemoteString, dllPath.c_str(), dllPath.size(), NULL);
-	hThread = CreateRemoteThread(process.ProcessHandle, NULL, NULL, (LPTHREAD_START_ROUTINE)LoadLibraryAAddr, (LPVOID)RemoteString, NULL, NULL);
+	LPVOID RemoteString = (LPVOID)VirtualAllocEx(Process.ProcessHandle, NULL, dllPath.size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	WriteProcessMemory(Process.ProcessHandle, (LPVOID)RemoteString, dllPath.c_str(), dllPath.size(), NULL);
+	hThread = CreateRemoteThread(Process.ProcessHandle, NULL, NULL, (LPTHREAD_START_ROUTINE)LoadLibraryAAddr, (LPVOID)RemoteString, NULL, NULL);
 	return hThread;
 }
 

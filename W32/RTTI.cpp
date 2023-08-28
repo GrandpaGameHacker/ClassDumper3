@@ -5,12 +5,12 @@
 RTTI::RTTI(FTargetProcess* InProcess, std::string InModuleName)
 {
 	Process = InProcess;
-	Module = Process->moduleMap.GetModule(InModuleName);
+	Module = Process->ModuleMap.GetModule(InModuleName);
 	ModuleName = InModuleName;
 	
 	if (IsRunning64Bits())
 	{
-		ModuleBase = (uintptr_t)Module->baseAddress;
+		ModuleBase = (uintptr_t)Module->BaseAddress;
 	}
 	else
 	{
@@ -38,36 +38,26 @@ std::shared_ptr<_Class> RTTI::FindFirst(const std::string& ClassName)
 	}
 	
 	return nullptr;
-	
-	// keeping this around just in case I fucked something up with optimizations
-	//for (std::shared_ptr<_Class>& c : Classes)
-	//{
-	//	if (c->Name.find(ClassName) != std::string::npos)
-	//	{
-	//		return c;
-	//	}
-	//}
-	//return nullptr;
 }
 
 std::vector<std::shared_ptr<_Class>> RTTI::FindAll(const std::string& ClassName)
 {
-	std::vector<std::shared_ptr<_Class>> classes;
-	std::string lowerClassName = ClassName;
-	std::transform(lowerClassName.begin(), lowerClassName.end(), lowerClassName.begin(), ::tolower);
+	std::vector<std::shared_ptr<_Class>> Classes;
+	std::string LowerClassName = ClassName;
+	std::transform(LowerClassName.begin(), LowerClassName.end(), LowerClassName.begin(), ::tolower);
 
-	for (auto& entry : NameClassMap)
+	for (auto& Entry : NameClassMap)
 	{
-		std::string lowerEntryFirst = entry.first;
-		std::transform(lowerEntryFirst.begin(), lowerEntryFirst.end(), lowerEntryFirst.begin(), ::tolower);
+		std::string LowerEntryFirst = Entry.first;
+		std::transform(LowerEntryFirst.begin(), LowerEntryFirst.end(), LowerEntryFirst.begin(), ::tolower);
 
-		if (lowerEntryFirst.find(lowerClassName) != std::string::npos)
+		if (LowerEntryFirst.find(LowerClassName) != std::string::npos)
 		{
-			classes.push_back(entry.second);
+			Classes.push_back(Entry.second);
 		}
 	}
 
-	return classes;
+	return Classes;
 }
 
 std::vector<std::shared_ptr<_Class>> RTTI::GetClasses()
@@ -118,36 +108,37 @@ std::string RTTI::GetLoadingStage()
 void RTTI::FindValidSections()
 {
 	SetLoadingStage("Finding valid PE sections");
-	bool bFound1 = false;
-	bool bFound2 = false;
+	bool bFoundExecutable = false;
+	bool bFoundReadOnly = false;
+	
 	// find valid executable or read only sections
-	for (auto& section : Module->sections)
+	for (auto& section : Module->Sections)
 	{
 		if (section.bFlagExecutable)
 		{
 			ExecutableSections.push_back(section);
-			bFound1 = true;
+			bFoundExecutable = true;
 		}
 
 		if (section.bFlagReadonly && !section.bFlagExecutable)
 		{
 			ReadOnlySections.push_back(section);
-			bFound2 = true;
+			bFoundReadOnly = true;
 		}
 	}
 
-	if (!bFound1 || !bFound2)
+	if (!bFoundExecutable || !bFoundReadOnly)
 	{
 		ClassDumper3::Log("Failed to find valid sections for RTTI scan");
 		SetLoadingStage("Error: Failed to find valid sections for RTTI scan");
 	}
 }
 
-bool RTTI::IsInExecutableSection(uintptr_t address)
+bool RTTI::IsInExecutableSection(uintptr_t Address)
 {
-	for (const FModuleSection& section : ExecutableSections)
+	for (const FModuleSection& Section : ExecutableSections)
 	{
-		if (address >= section.Start && address <= section.End)
+		if (Section.Contains(Address))
 		{
 			return true;
 		}
@@ -155,11 +146,11 @@ bool RTTI::IsInExecutableSection(uintptr_t address)
 	return false;
 }
 
-bool RTTI::IsInReadOnlySection(uintptr_t address)
+bool RTTI::IsInReadOnlySection(uintptr_t Address)
 {
-	for (const FModuleSection& section : ReadOnlySections)
+	for (const FModuleSection& Section : ReadOnlySections)
 	{
-		if (address >= section.Start && address <= section.End)
+		if (Section.Contains(Address))
 		{
 			return true;
 		}

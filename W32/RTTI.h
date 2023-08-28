@@ -43,7 +43,7 @@ struct RTTICompleteObjectLocator
 
 struct RTTITypeDescriptor
 {
-	uintptr_t pVFTable = 0; // pointer to the vftable
+	uintptr_t pVTable = 0; // pointer to the vftable
 	uintptr_t spare = 0;
 	char name = 0; // name of the class
 };
@@ -53,6 +53,7 @@ struct PotentialClass
 {
 	uintptr_t CompleteObjectLocator = 0;
 	uintptr_t VTable = 0;
+	std::string Name;
 	std::string DemangledName;
 };
 
@@ -155,8 +156,8 @@ protected:
 	uintptr_t ModuleBase;
 	FTargetProcess* Process;
 
-	std::vector<ModuleSection> ExecutableSections;
-	std::vector<ModuleSection> ReadOnlySections;
+	std::vector<FModuleSection> ExecutableSections;
+	std::vector<FModuleSection> ReadOnlySections;
 	std::vector<PotentialClass> PotentialClasses;
 	std::vector<PotentialClass> PotentialClassesFinal;
 	std::vector<std::shared_ptr<_Class>> Classes;

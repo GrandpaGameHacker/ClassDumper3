@@ -106,29 +106,29 @@ std::vector<FProcessListItem> GetProcessList(const std::string& Filter)
 	return List;
 }
 
-bool Is32BitExecutable(const std::string& filePath, bool& bFailed)
+bool Is32BitExecutable(const std::string& FilePath, bool& bFailed)
 {
-	HANDLE hFile = CreateFileA(filePath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hFile == INVALID_HANDLE_VALUE)
+	HANDLE FileHandle = CreateFileA(FilePath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (FileHandle == INVALID_HANDLE_VALUE)
 	{
 		bFailed = true;
 		return false;
 	}
 
-	HANDLE hMap = CreateFileMapping(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
-	if (!hMap)
+	HANDLE FileMappingHandle = CreateFileMapping(FileHandle, NULL, PAGE_READONLY, 0, 0, NULL);
+	if (!FileMappingHandle)
 	{
-		CloseHandle(hFile);
+		CloseHandle(FileHandle);
 		bFailed = true;
 		return false;
 	}
 
-	LPVOID pFileBase = MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, 0);
+	LPVOID pFileBase = MapViewOfFile(FileMappingHandle, FILE_MAP_READ, 0, 0, 0);
 	if (!pFileBase)
 	{
 		bFailed = true;
-		CloseHandle(hMap);
-		CloseHandle(hFile);
+		CloseHandle(FileMappingHandle);
+		CloseHandle(FileHandle);
 		return false;
 	}
 
@@ -137,27 +137,27 @@ bool Is32BitExecutable(const std::string& filePath, bool& bFailed)
 	{
 		bFailed = true;
 		UnmapViewOfFile(pFileBase);
-		CloseHandle(hMap);
-		CloseHandle(hFile);
+		CloseHandle(FileMappingHandle);
+		CloseHandle(FileHandle);
 		return false;
 	}
 
 	IMAGE_NT_HEADERS* pNtHeaders = reinterpret_cast<IMAGE_NT_HEADERS*>(
 		reinterpret_cast<char*>(pFileBase) + pDosHeader->e_lfanew);
 
-	bool is64Bit = pNtHeaders->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC;
+	bool bIs64Bit = pNtHeaders->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC;
 
 	UnmapViewOfFile(pFileBase);
-	CloseHandle(hMap);
-	CloseHandle(hFile);
+	CloseHandle(FileMappingHandle);
+	CloseHandle(FileHandle);
 
 	bFailed = false;
-	return !is64Bit;
+	return !bIs64Bit;
 }
 
 bool IsSameBitsProcess(const std::string& FilePath)
 {
-	bool b32Local = sizeof(void*) == 4;
+	bool b32Local = !IsRunning64Bits();
 	bool bFailed = false;
 	bool b32Remote = Is32BitExecutable(FilePath, bFailed);
 	return (b32Local == b32Remote) && !bFailed;
@@ -171,7 +171,6 @@ FProcess::FProcess(DWORD PID)
 	{
 		ClassDumper3::Log("Failed to open process");
 	}
-	CheckBits();
 
 	char szProcessName[MAX_PATH] = "<unknown>";
 	GetModuleBaseNameA(ProcessHandle, NULL, szProcessName, sizeof(szProcessName) / sizeof(char));
@@ -186,7 +185,6 @@ FProcess::FProcess(const std::string& ProcessName)
 	{
 		ClassDumper3::Log("Failed to open process");
 	}
-	CheckBits();
 	char szProcessName[MAX_PATH] = "<unknown>";
 	GetModuleBaseNameA(ProcessHandle, NULL, szProcessName, sizeof(szProcessName) / sizeof(char));
 	this->ProcessName = szProcessName;
@@ -227,34 +225,6 @@ bool FProcess::IsValid()
 	return this->ProcessHandle != INVALID_HANDLE_VALUE;
 }
 
-bool FProcess::Is32Bit()
-{
-	BOOL bIsWow64 = FALSE;
-	typedef BOOL(WINAPI* LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
-	HMODULE Kernel32 = GetModuleHandle(TEXT("kernel32"));
-
-	if (Kernel32 == NULL)
-	{
-		ClassDumper3::Log("Failed to get kernel32 handle");
-	}
-
-	LPFN_ISWOW64PROCESS fnIsWow64Process = (LPFN_ISWOW64PROCESS)GetProcAddress((Kernel32), "IsWow64Process");
-	if (fnIsWow64Process != nullptr)
-	{
-		fnIsWow64Process(this->ProcessHandle, &bIsWow64);
-		return bIsWow64;
-	}
-	ClassDumper3::Log("Error function IsWow64Process does not exist");
-	return false;
-}
-
-bool FProcess::IsSameBits()
-{
-	bool b64Remote = !Is32Bit();
-	bool b64Local = sizeof(void*) == 8;
-	return b64Remote == b64Local;
-}
-
 bool FProcess::AttachDebugger()
 {
 	return DebugActiveProcess(PID);
@@ -289,15 +259,6 @@ bool FProcess::Free(void* Address)
 {
 	return VirtualFreeEx(ProcessHandle, Address, 0, MEM_RELEASE);
 }
-
-void FProcess::CheckBits()
-{
-	if (!IsSameBits())
-	{
-		ClassDumper3::Log("Process is not the same bits");
-	}
-}
-
 
 FProcess& FProcess::operator=(const FProcess& Other)
 {
@@ -370,17 +331,17 @@ void FMemoryMap::Setup(FProcess* process)
 
 	}
 	
-	ClassDumper3::LogF("Found %u memory regions", ranges.size());
+	ClassDumper3::LogF("Found %u memory regions", Ranges.size());
 }
 
-bool ModuleSection::Contains(uintptr_t address) const
+bool FModuleSection::Contains(uintptr_t Address) const
 {
-	return address >= start && address <= end;
+	return Address >= Start && Address <= End;
 }
 
-uintptr_t ModuleSection::Size() const
+uintptr_t FModuleSection::Size() const
 {
-	return end - start;
+	return End - Start;
 }
 
 void FModuleMap::Setup(FProcess* process)
@@ -414,11 +375,11 @@ void FModuleMap::Setup(FProcess* process)
 		for (int i = 0; i < ntHeaders.FileHeader.NumberOfSections; i++)
 		{
 			IMAGE_SECTION_HEADER& sectionHeader = sectionHeaders[i];
-			Module.sections.push_back(ModuleSection());
-			ModuleSection& section = Module.sections.back();
-			section.name = (char*)sectionHeader.Name;
-			section.start = (uintptr_t)me32.modBaseAddr + sectionHeader.VirtualAddress;
-			section.end = section.start + sectionHeader.Misc.VirtualSize;
+			Module.sections.push_back(FModuleSection());
+			FModuleSection& section = Module.sections.back();
+			section.Name = (char*)sectionHeader.Name;
+			section.Start = (uintptr_t)me32.modBaseAddr + sectionHeader.VirtualAddress;
+			section.End = section.Start + sectionHeader.Misc.VirtualSize;
 			section.bFlagExecutable = sectionHeader.Characteristics & IMAGE_SCN_MEM_EXECUTE;
 			section.bFlagReadonly = sectionHeader.Characteristics & IMAGE_SCN_MEM_READ;
 		}
@@ -446,7 +407,7 @@ FModule* FModuleMap::GetModule(uintptr_t address)
 {
 	auto it = std::find_if(Modules.begin(), Modules.end(), [address](const FModule& module)
 		{
-			return address >= (uintptr_t)module.baseAddress && address <= (uintptr_t)module.baseAddress + module.sections.back().end;
+			return address >= (uintptr_t)module.baseAddress && address <= (uintptr_t)module.baseAddress + module.sections.back().End;
 		});
 	if (it != Modules.end()) return &*it;
 	return nullptr;
@@ -473,11 +434,6 @@ void FTargetProcess::Setup(FProcess process)
 	moduleMap.Setup(&process);
 }
 
-bool FTargetProcess::Is64Bit()
-{
-	return !process.Is32Bit();
-}
-
 bool FTargetProcess::IsValid()
 {
 	return process.IsValid();
@@ -497,7 +453,7 @@ FModule* FTargetProcess::GetModule(const std::string& moduleName)
 
 FMemoryRange* FTargetProcess::GetMemoryRange(uintptr_t address)
 {
-	for (auto& range : memoryMap.ranges)
+	for (auto& range : memoryMap.Ranges)
 	{
 		if (range.Contains(address))
 		{
@@ -512,7 +468,7 @@ std::vector<MemoryBlock> FTargetProcess::GetReadableMemory()
 {
 	std::vector<std::future<MemoryBlock>> futures;
 	std::vector<MemoryBlock> blocks;
-	for (auto& range : memoryMap.ranges)
+	for (auto& range : memoryMap.Ranges)
 	{
 		if (range.bReadable)
 		{
@@ -542,7 +498,7 @@ std::vector<MemoryBlock> FTargetProcess::GetReadableMemory()
 std::vector<std::future<MemoryBlock>> FTargetProcess::AsyncGetReadableMemory()
 {
 	std::vector<std::future<MemoryBlock>> futures;
-	for (auto& range : memoryMap.ranges)
+	for (auto& range : memoryMap.Ranges)
 	{
 		if (range.bReadable)
 		{
@@ -562,7 +518,7 @@ std::vector<std::future<MemoryBlock>> FTargetProcess::AsyncGetReadableMemory()
 	return futures;
 }
 
-ModuleSection* FTargetProcess::GetModuleSection(uintptr_t address)
+FModuleSection* FTargetProcess::GetModuleSection(uintptr_t address)
 {
 	for (auto& module : moduleMap.Modules)
 	{

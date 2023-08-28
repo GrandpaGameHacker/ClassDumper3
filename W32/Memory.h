@@ -32,15 +32,14 @@ struct FProcessListItem
 
 std::vector<FProcessListItem> GetProcessList();
 std::vector<FProcessListItem> GetProcessList(const std::string& Filter);
-float ShannonEntropyBlock(const void* data, size_t size);
-bool IsBlockHighEntropy(const void* data, size_t size, float threshold);
 
 void GetDebugPrivilege();
 
-bool Is32BitExecutable(const std::string& filePath, bool& bFailed);
+bool Is32BitExecutable(const std::string& FilePath, bool& bFailed);
 bool Is32BitProcess(DWORD PID);
 
 bool IsSameBitsProcess(const std::string& FilePath);
+inline bool IsRunning64Bits() {return sizeof(void*) == 8;};
 
 
 struct FProcess
@@ -62,8 +61,6 @@ struct FProcess
 	
 	DWORD GetProcessID(const std::string& ProcessName);
 	bool IsValid();
-	bool Is32Bit();
-	bool IsSameBits();
 	bool AttachDebugger();
 	bool DetachDebugger();
 	bool DebugWait();
@@ -71,10 +68,6 @@ struct FProcess
 	void* AllocRW(size_t size);
 	void* AllocRWX(size_t size);
 	bool Free(void* Address);
-
-private:
-	void CheckBits();
-
 };
 
 struct FMemoryRange
@@ -96,22 +89,22 @@ struct FMemoryMap
 };
 
 
-struct ModuleSection
+struct FModuleSection
 {
-	uintptr_t start = 0;
-	uintptr_t end = 0;
+	uintptr_t Start = 0;
+	uintptr_t End = 0;
 	bool bFlagReadonly = false;
 	bool bFlagExecutable = false;
-	std::string name;
+	std::string Name;
 	
-	bool Contains(uintptr_t address) const;
+	bool Contains(uintptr_t Address) const;
 	uintptr_t Size() const;
 };
 
 struct FModule
 {
 	void* baseAddress = nullptr;
-	std::vector<ModuleSection> sections;
+	std::vector<FModuleSection> sections;
 	std::string name;
 };
 
@@ -148,15 +141,13 @@ struct FTargetProcess
 	void Setup(FProcess process);
 
 	/*********** Process Utils ***********/
-
-	bool Is64Bit();
 	bool IsValid();
 
 	FModule* GetModule(const std::string& moduleName);
 	FMemoryRange* GetMemoryRange(uintptr_t address);
 	std::vector<MemoryBlock> GetReadableMemory();
 	std::vector<std::future<MemoryBlock>> AsyncGetReadableMemory();
-	ModuleSection* GetModuleSection(uintptr_t address);
+	FModuleSection* GetModuleSection(uintptr_t address);
 	DWORD SetProtection(uintptr_t address, size_t size, DWORD protection);
 
 	/*********** Window Utils ***********/

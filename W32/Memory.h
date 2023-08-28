@@ -21,7 +21,7 @@
 #include <map>
 #include <algorithm>
 
-constexpr int StandardBuffer = 0x1000;
+constexpr int StandardBufferSize = 0x1000;
 
 struct FProcessListItem
 {

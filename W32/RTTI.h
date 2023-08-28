@@ -98,7 +98,7 @@ struct _ParentClassNode
 	// base class of this class (found by looking for class of the same name)
 	std::weak_ptr<_Class> Class;
 	// depth of the class in the tree
-	DWORD treeDepth = 0;
+	DWORD TreeDepth = 0;
 };
 
 /************************************************************************/
@@ -136,11 +136,11 @@ protected:
 	// todo: name functions based on what class they are from...
 	void EnumerateVirtualFunctions(std::shared_ptr<_Class>& c);
 
-	std::string DemangleMSVC(char* symbol);
+	std::string DemangleMSVC(char* Symbol);
 	void SortClasses();
-	void FilterSymbol(std::string& symbol);
+	void FilterSymbol(std::string& Symbol);
 
-	void SetLoadingStage(std::string stage);
+	void SetLoadingStage(std::string Stage);
 
 	std::atomic_bool bIsProcessing = false;
 	std::thread ProcessThread;

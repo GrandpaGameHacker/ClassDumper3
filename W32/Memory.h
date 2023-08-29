@@ -45,13 +45,13 @@ inline bool IsRunning64Bits() {return sizeof(void*) == 8;};
 
 struct FProcess
 {
-	HANDLE ProcessHandle;
-	DWORD PID;
-	std::string ProcessName;
+	HANDLE ProcessHandle = INVALID_HANDLE_VALUE;
+	DWORD PID = 0;
+	std::string ProcessName = "<invalid>";
 
-	DEBUG_EVENT DebugEvent;
+	DEBUG_EVENT DebugEvent = { 0 };
 	bool bIsDebugActive = false;
-	CONTEXT DebugActiveContext;
+	CONTEXT DebugActiveContext = { 0 };
 
 	FProcess();
 	FProcess(DWORD InPID);
@@ -73,6 +73,14 @@ struct FProcess
 
 struct FMemoryRange
 {
+	FMemoryRange()
+		: Start(0)
+		, End(0)
+		, bExecutable(false)
+		, bReadable(false)
+		, bWritable(false)
+	{}
+	
 	uintptr_t Start;
 	uintptr_t End;
 	bool bExecutable, bReadable, bWritable;
@@ -84,7 +92,7 @@ struct FMemoryRange
 
 struct FMemoryMap
 {
-	std::vector<FMemoryRange> Ranges;
+	std::vector<FMemoryRange> Ranges {};
 	FMemoryRange* CurrentRange = nullptr;
 	void Setup(FProcess* Process);
 };
@@ -92,10 +100,34 @@ struct FMemoryMap
 
 struct FModuleSection
 {
-	uintptr_t Start = 0;
-	uintptr_t End = 0;
-	bool bFlagReadonly = false;
-	bool bFlagExecutable = false;
+	FModuleSection()
+		: Start(0)
+		, End(0)
+		, bFlagReadonly(false)
+		, bFlagExecutable(false)
+		, Name("")
+	{}
+
+	FModuleSection(uintptr_t InStart, uintptr_t InEnd, bool InbFlagReadonly, bool InbFlagExecutable, const std::string& InName)
+		: Start(InStart)
+		, End(InEnd)
+		, bFlagReadonly(InbFlagReadonly)
+		, bFlagExecutable(InbFlagExecutable)
+		, Name(InName)
+	{}
+
+	FModuleSection(const FModuleSection& Other)
+		: Start(Other.Start)
+		, End(Other.End)
+		, bFlagReadonly(Other.bFlagReadonly)
+		, bFlagExecutable(Other.bFlagExecutable)
+		, Name(Other.Name)
+	{}
+	
+	uintptr_t Start;
+	uintptr_t End;
+	bool bFlagReadonly;
+	bool bFlagExecutable;
 	std::string Name;
 	
 	bool Contains(uintptr_t Address) const;
@@ -104,6 +136,24 @@ struct FModuleSection
 
 struct FModule
 {
+	FModule()
+		: BaseAddress(nullptr)
+		, Sections()
+		, Name("")
+	{}
+
+	FModule(void* InBaseAddress, const std::vector<FModuleSection>& InSections, const std::string& InName)
+		: BaseAddress(InBaseAddress)
+		, Sections(InSections)
+		, Name(InName)
+	{}
+
+	FModule(const FModule& Other)
+		: BaseAddress(Other.BaseAddress)
+		, Sections(Other.Sections)
+		, Name(Other.Name)
+	{}
+	
 	void* BaseAddress = nullptr;
 	std::vector<FModuleSection> Sections;
 	std::string Name;
@@ -112,11 +162,11 @@ struct FModule
 struct FModuleMap
 {
 	std::vector<FModule> Modules;
-	void Setup(FProcess* process);
+	void Setup(const FProcess* Process);
 
-	FModule* GetModule(const char* name);
-	FModule* GetModule(const std::string& name);
-	FModule* GetModule(uintptr_t address);
+	FModule* GetModule(const char* Name);
+	FModule* GetModule(const std::string& Name);
+	FModule* GetModule(const uintptr_t Address);
 };
 
 struct MemoryBlock
@@ -145,7 +195,7 @@ struct FTargetProcess
 	bool IsValid();
 
 	FModule* GetModule(const std::string& moduleName);
-	FMemoryRange* GetMemoryRange(uintptr_t address);
+	FMemoryRange* GetMemoryRange(const uintptr_t Address);
 	std::vector<MemoryBlock> GetReadableMemory();
 	std::vector<std::future<MemoryBlock>> AsyncGetReadableMemory();
 	FModuleSection* GetModuleSection(uintptr_t address);
@@ -154,22 +204,22 @@ struct FTargetProcess
 	/*********** Window Utils ***********/
 	
 	std::vector<HWND> GetWindows();
-	std::string GetWindowName(HWND window);
-	bool SetWindowName(HWND window, const std::string& name);
-	bool SetTransparency(HWND window, BYTE alpha);
+	std::string GetWindowName(HWND Window);
+	bool SetWindowName(HWND Window, const std::string& Name);
+	bool SetTransparency(HWND Window, BYTE Alpha);
 
 	/*********** Memory Utils ***********/
 
-	void Read(uintptr_t address, void* buffer, size_t size);
+	void Read(uintptr_t Address, void* Buffer, size_t Size);
 
-	std::future<void*> AsyncRead(uintptr_t address, size_t size);
+	std::future<void*> AsyncRead(uintptr_t Address, size_t Size);
 
 	template<typename T>
-	T Read(uintptr_t address)
+	T Read(uintptr_t Address)
 	{
-		T buffer;
-		ReadProcessMemory(Process.ProcessHandle, (void*)address, &buffer, sizeof(T), NULL);
-		return buffer;
+		T Buffer;
+		ReadProcessMemory(Process.ProcessHandle, (void*)Address, &Buffer, sizeof(T), NULL);
+		return Buffer;
 	}
 
 	template<typename T>
@@ -193,7 +243,7 @@ struct FTargetProcess
 	}
 
 	HANDLE InjectDLL(const std::string& dllPath);
-	void InjectDLLAsync(const std::string& dllPath);
+	std::future<HANDLE> InjectDLLAsync(const std::string& dllPath);
 	
 };
 

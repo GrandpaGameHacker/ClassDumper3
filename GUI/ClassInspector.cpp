@@ -122,7 +122,8 @@ void ClassInspector::DrawCodeReferences()
 	ImGui::BeginChildFrame(2, ImVec2(0, 0), ImGuiWindowFlags_NoCollapse);
 	for (auto& CodeReference : SelectedClass->CodeReferences)
 	{
-		if (ImGui::Text("0x%s", IntegerToHexStr(CodeReference).c_str()))
+		ImGui::Text("0x%s", IntegerToHexStr(CodeReference).c_str())
+		if (ImGui::IsItemClicked(EMouseButton::Left))
 		{
 			// disassemble window
 		}

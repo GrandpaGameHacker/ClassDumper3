@@ -36,76 +36,98 @@ void ClassInspector::InitializeBindings()
 
 void ClassInspector::Draw()
 {
-	if (SelectedClass)
+	if (!SelectedClass) return;
+	
+	const char* WindowTitle = "Class Inspector###";
+		
+	if (SelectedClass->bInterface)
 	{
-		const char* WindowTitle = "Class Inspector###";
+		WindowTitle = "Interface Inspector###";
+	}
+	else if (SelectedClass->bStruct)
+	{
+		WindowTitle = "Structure Inspector###";
+	}
 		
-		if (SelectedClass->bInterface)
-		{
-			WindowTitle = "Interface Inspector###";
-		}
-		else if (SelectedClass->bStruct)
-		{
-			WindowTitle = "Structure Inspector###";
-		}
+	ImGui::Begin(WindowTitle, nullptr, ImGuiWindowFlags_NoCollapse);
 		
-		ImGui::Begin(WindowTitle, nullptr, ImGuiWindowFlags_NoCollapse);
-		
-		if (ImGui::Button("Copy To Clipboard"))
-		{
-			CopyInfo();
-		}
-		
-		ImGui::Separator();
-		ImGui::Text("Name: %s", SelectedClass->Name.c_str());
-
-		ImGui::Text("CompleteObjectLocator: 0x%s", IntegerToHexStr(SelectedClass->CompleteObjectLocator).c_str());
-		ImGui::Text("Num Inherited: %d", SelectedClass->Parents.size());
-		{
-			ScopedColor Color(ImGuiCol_Text, Color::Red);
-			for (std::shared_ptr<_ParentClassNode> Parent : SelectedClass->Parents)
-			{
-				ImGui::Text(Parent->Name.c_str());
-			}
-		}
-
-		ImGui::Text("Num Interfaces: %d", SelectedClass->Interfaces.size());
-		{
-			ScopedColor Color(ImGuiCol_Text, Color::Magenta);
-			for (std::weak_ptr<_Class> InterfaceWeak : SelectedClass->Interfaces)
-			{
-				std::shared_ptr<_Class> Interface = InterfaceWeak.lock();
-				if (!Interface) continue;
-				ImGui::Text(Interface->Name.c_str());
-			}
-		}
-
-		ImGui::Text("Virtual Function Table: 0x%s", IntegerToHexStr(SelectedClass->VTable).c_str());
-		ImGui::Text("Num Virtual Functions: %d", SelectedClass->Functions.size());
-
-		{
-			ScopedColor Color(ImGuiCol_Text, Color::Green);
-			int Index = 0;
-			for (auto& Function: SelectedClass->FunctionNames)
-			{
-				
-				std::string FunctionText = "%d - " + IntegerToHexStr(Function.first) + " : " + Function.second;
-				ImGui::Text(FunctionText.c_str(), Index);
-				if (ImGui::IsItemClicked(EMouseButton::Left))
-				{
-					// insert disassembler tool here
-				}
-				if (ImGui::IsItemClicked(EMouseButton::Right))
-				{
-					RenameFunction(&Function);
-				}
-
-				Index++;
-			}
-		}
-		ImGui::End();
+	if (ImGui::Button("Copy To Clipboard"))
+	{
+		CopyInfo();
 	}
 
+	ImGui::SameLine();
+		
+	if (ImGui::Button("Scan for Code References"))
+	{
+		RTTIObserver->ScanForCodeReferences(SelectedClass);
+	}
+		
+	ImGui::Separator();
+	ImGui::Text("Name: %s", SelectedClass->Name.c_str());
+
+	ImGui::Text("CompleteObjectLocator: 0x%s", IntegerToHexStr(SelectedClass->CompleteObjectLocator).c_str());
+	ImGui::Text("Num Inherited: %d", SelectedClass->Parents.size());
+	{
+		ScopedColor Color(ImGuiCol_Text, Color::Red);
+		for (std::shared_ptr<_ParentClassNode> Parent : SelectedClass->Parents)
+		{
+			ImGui::Text(Parent->Name.c_str());
+		}
+	}
+
+	ImGui::Text("Num Interfaces: %d", SelectedClass->Interfaces.size());
+	{
+		ScopedColor Color(ImGuiCol_Text, Color::Magenta);
+		for (std::weak_ptr<_Class> InterfaceWeak : SelectedClass->Interfaces)
+		{
+			std::shared_ptr<_Class> Interface = InterfaceWeak.lock();
+			if (!Interface) continue;
+			ImGui::Text(Interface->Name.c_str());
+		}
+	}
+
+	ImGui::Text("Virtual Function Table: 0x%s", IntegerToHexStr(SelectedClass->VTable).c_str());
+	ImGui::Text("Num Virtual Functions: %d", SelectedClass->Functions.size());
+
+	{
+		ScopedColor Color(ImGuiCol_Text, Color::Green);
+		int Index = 0;
+		for (auto& Function: SelectedClass->FunctionNames)
+		{
+				
+			std::string FunctionText = "%d - " + IntegerToHexStr(Function.first) + " : " + Function.second;
+			ImGui::Text(FunctionText.c_str(), Index);
+			if (ImGui::IsItemClicked(EMouseButton::Left))
+			{
+				// insert disassembler tool here
+			}
+			if (ImGui::IsItemClicked(EMouseButton::Right))
+			{
+				RenameFunction(&Function);
+			}
+
+			Index++;
+		}
+	}
+
+	DrawCodeReferences();
+	ImGui::End();
+}
+
+void ClassInspector::DrawCodeReferences()
+{
+	if (!SelectedClass) return;
+	ImGui::Text("Code References:");
+	ImGui::BeginChildFrame(2, ImVec2(0, 0), ImGuiWindowFlags_NoCollapse);
+	for (auto& CodeReference : SelectedClass->CodeReferences)
+	{
+		if (ImGui::Text("0x%s", IntegerToHexStr(CodeReference).c_str()))
+		{
+			// disassemble window
+		}
+	}
+	ImGui::EndChildFrame();
 }
 
 void ClassInspector::OnProcessSelectedDelegate(std::shared_ptr<FTargetProcess> InTarget, std::shared_ptr<RTTI> InRTTI)

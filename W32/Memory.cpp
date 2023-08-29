@@ -338,19 +338,23 @@ uintptr_t FMemoryRange::Size() const
 
 void FMemoryMap::Setup(FProcess* process)
 {
+	const DWORD ExecuteFlags = (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY);
+	const DWORD ReadFlags = (PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY | PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY);
+	const DWORD WriteFlags = (PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY | PAGE_READWRITE | PAGE_WRITECOPY);
+	
 	// Get readable memory ranges
 	MEMORY_BASIC_INFORMATION MBI;
 	for (uintptr_t Address = 0; VirtualQueryEx(process->ProcessHandle, (LPCVOID)Address, &MBI, sizeof(MBI)); Address += MBI.RegionSize)
 	{
-		if (MBI.State == MEM_COMMIT && (MBI.Protect & PAGE_READWRITE || MBI.Protect & PAGE_EXECUTE_READWRITE))
+		if (MBI.State == MEM_COMMIT && (MBI.Protect & ExecuteFlags || MBI.Protect & ReadFlags || MBI.Protect & WriteFlags))
 		{
 			Ranges.push_back(
 				FMemoryRange(
 					(uintptr_t)MBI.BaseAddress,
 					(uintptr_t)MBI.BaseAddress + MBI.RegionSize,
-					MBI.Protect & PAGE_EXECUTE,
-					MBI.Protect & PAGE_READONLY,
-					MBI.Protect & PAGE_READWRITE));
+					(MBI.Protect & ExecuteFlags),
+					MBI.Protect & ReadFlags,
+					MBI.Protect & WriteFlags));
 		}
 	}
 	if (Ranges.size() == 0)
@@ -501,18 +505,18 @@ FMemoryRange* FTargetProcess::GetMemoryRange(const uintptr_t Address)
 	return nullptr;
 }
 
-std::vector<MemoryBlock> FTargetProcess::GetReadableMemory()
+std::vector<FMemoryBlock> FTargetProcess::GetReadableMemory()
 {
-	std::vector<std::future<MemoryBlock>> Futures;
-	std::vector<MemoryBlock> Blocks;
+	std::vector<std::future<FMemoryBlock>> Futures;
+	std::vector<FMemoryBlock> Blocks;
 	for (auto& Range : MemoryMap.Ranges)
 	{
 		if (Range.bReadable)
 		{
 			// get a future using async launch lambda
-			auto future = std::async(std::launch::async, [&Range, &Process = Process]()
+			auto Future = std::async(std::launch::async, [&Range, &Process = Process]()
 				{
-					MemoryBlock Block;
+					FMemoryBlock Block;
 					
 					Block.Address = (void*)Range.Start;
 					Block.Size = Range.Size();
@@ -523,7 +527,7 @@ std::vector<MemoryBlock> FTargetProcess::GetReadableMemory()
 					ReadProcessMemory(Process.ProcessHandle, Block.Address, Block.Copy, Block.Size, NULL);
 					return Block;
 				});
-			Futures.push_back(std::move(future));
+			Futures.push_back(std::move(Future));
 		}
 	}
 
@@ -536,21 +540,17 @@ std::vector<MemoryBlock> FTargetProcess::GetReadableMemory()
 	return Blocks;
 }
 
-std::vector<std::future<MemoryBlock>> FTargetProcess::AsyncGetReadableMemory()
+std::vector<std::future<FMemoryBlock>> FTargetProcess::AsyncGetReadableMemory(bool bExecutable)
 {
-	std::vector<std::future<MemoryBlock>> futures;
+	std::vector<std::future<FMemoryBlock>> futures;
 	for (auto& Range : MemoryMap.Ranges)
 	{
-		if (Range.bReadable)
+		if (Range.bReadable || (bExecutable && Range.bExecutable))
 		{
 			// get a future using async launch lambda
 			auto future = std::async(std::launch::async, [&Range, &Process = Process]()
 				{
-					MemoryBlock Block;
-					
-					Block.Address = (void*)Range.Start;
-					Block.Size = Range.Size();
-					Block.Copy = malloc(Block.Size);
+					FMemoryBlock Block(Range.Start, Range.Size());
 					
 					if (!Block.Copy) return Block;
 					
@@ -661,7 +661,7 @@ void FTargetProcess::AsyncWrite(uintptr_t Address, void* Buffer, size_t Size)
 		});
 }
 
-HANDLE FTargetProcess::InjectDLL(const std::string& dllPath)
+HANDLE FTargetProcess::InjectDLL(const std::string& DllPath)
 {
 	HANDLE DllInjectThreadHandle = NULL;
 	
@@ -671,19 +671,19 @@ HANDLE FTargetProcess::InjectDLL(const std::string& dllPath)
 	LPVOID LoadLibraryAAddr = (LPVOID)GetProcAddress(Kernel32, "LoadLibraryA");
 	if (!LoadLibraryAAddr) return DllInjectThreadHandle;
 	
-	LPVOID RemoteString = (LPVOID)VirtualAllocEx(Process.ProcessHandle, NULL, dllPath.size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	LPVOID RemoteString = (LPVOID)VirtualAllocEx(Process.ProcessHandle, NULL, DllPath.size(), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	if (!RemoteString) return DllInjectThreadHandle;
 	
-	WriteProcessMemory(Process.ProcessHandle, (LPVOID)RemoteString, dllPath.c_str(), dllPath.size(), NULL);
+	WriteProcessMemory(Process.ProcessHandle, (LPVOID)RemoteString, DllPath.c_str(), DllPath.size(), NULL);
 	
 	DllInjectThreadHandle = CreateRemoteThread(Process.ProcessHandle, NULL, NULL, (LPTHREAD_START_ROUTINE)LoadLibraryAAddr, (LPVOID)RemoteString, NULL, NULL);
 	return DllInjectThreadHandle;
 }
 
-std::future<HANDLE> FTargetProcess::InjectDLLAsync(const std::string& dllPath)
+std::future<HANDLE> FTargetProcess::InjectDLLAsync(const std::string& DllPath)
 {
-	return std::async(std::launch::async, [this, dllPath]()
+	return std::async(std::launch::async, [this, DllPath]()
 		{
-			return InjectDLL(dllPath);
+			return InjectDLL(DllPath);
 		});
 }

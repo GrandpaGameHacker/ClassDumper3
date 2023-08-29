@@ -105,6 +105,53 @@ std::string RTTI::GetLoadingStage()
 	return LoadingStageCache;
 }
 
+std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<_Class>& CClass)
+{
+	if (!CClass) return std::vector<uintptr_t>();
+	
+	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetReadableMemory(true);
+	std::vector<FMemoryBlock> BlocksToFree;
+	std::vector<uintptr_t> References;
+	
+	for (auto& Block : Blocks)
+	{
+		FMemoryBlock MemoryBlock = Block.get();
+		if (MemoryBlock.Size == 0) continue;
+		if (!MemoryBlock.Copy) continue;
+		
+		BlocksToFree.push_back(MemoryBlock);
+		
+		uintptr_t MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy);
+		uintptr_t MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
+		
+		for (uintptr_t i = MemoryBlockCopy; i < MemoryBlockCopy + MemoryBlock.Size; i++)
+		{
+			uintptr_t RealAddress = i - MemoryBlockCopy + MemoryBlockAddress;
+			uintptr_t Candidate = *(DWORD*)i;
+			Candidate += RealAddress + 4;
+			if (Candidate == CClass->VTable)
+			{
+				// log reference
+				ClassDumper3::LogF("Found reference to %s at 0x%llX", CClass->Name.c_str(), RealAddress);
+				References.push_back(RealAddress);
+			}
+		}
+	}
+
+	for (FMemoryBlock& Block : BlocksToFree)
+	{
+		Block.FreeBlock();
+	}
+	
+	CClass->CodeReferences = References;
+	return References;
+}
+
+std::vector<uintptr_t> RTTI::ScanForClassInstances(const std::shared_ptr<_Class>& CClass)
+{
+	return std::vector<uintptr_t>();
+}
+
 void RTTI::FindValidSections()
 {
 	SetLoadingStage("Finding valid PE sections");

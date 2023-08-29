@@ -77,6 +77,7 @@ struct _Class
 	DWORD numBaseClasses = 0;
 	std::vector<std::shared_ptr<_ParentClassNode>> Parents;
 	std::vector<std::weak_ptr<_Class>> Interfaces;
+	std::vector<uintptr_t> CodeReferences;
 
 	bool bMultipleInheritance = false;
 	bool bVirtualInheritance = false;
@@ -123,6 +124,9 @@ public:
 	bool IsAsyncProcessing();
 
 	std::string GetLoadingStage();
+
+	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<_Class>& CClass);
+	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<_Class>& CClass);
 
 protected:
 	void FindValidSections();

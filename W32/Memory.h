@@ -169,16 +169,47 @@ struct FModuleMap
 	FModule* GetModule(const uintptr_t Address);
 };
 
-struct MemoryBlock
+struct FMemoryBlock
 {
+
+	FMemoryBlock() :
+		Copy(nullptr),
+		Address(nullptr),
+		Size(0)
+	{}
+
+	FMemoryBlock(void* InAddress, size_t InSize) :
+		Address(InAddress),
+		Size(InSize)
+	{
+		Copy = malloc(Size);
+	}
+
+	FMemoryBlock(uintptr_t InAddress, size_t InSize) :
+		Address(reinterpret_cast<void*>(InAddress)),
+		Size(InSize)
+	{
+		Copy = malloc(Size);
+	}
+
+	FMemoryBlock(const FMemoryBlock& Other) :
+		Copy(Other.Copy),
+		Address(Other.Address),
+		Size(Other.Size)
+	{}
+	
+	void FreeBlock()
+	{
+		if (Copy)
+		{
+			free(Copy);
+			Copy = nullptr;
+		}
+	}
+
 	void* Copy;
 	void* Address;
 	size_t Size;
-
-	~MemoryBlock()
-	{
-		free(Copy);
-	}
 };
 
 struct FTargetProcess
@@ -196,8 +227,8 @@ struct FTargetProcess
 
 	FModule* GetModule(const std::string& moduleName);
 	FMemoryRange* GetMemoryRange(const uintptr_t Address);
-	std::vector<MemoryBlock> GetReadableMemory();
-	std::vector<std::future<MemoryBlock>> AsyncGetReadableMemory();
+	std::vector<FMemoryBlock> GetReadableMemory();
+	std::vector<std::future<FMemoryBlock>> AsyncGetReadableMemory(bool bExecutable = false);
 	FModuleSection* GetModuleSection(uintptr_t address);
 	DWORD SetProtection(uintptr_t address, size_t size, DWORD protection);
 
@@ -242,8 +273,8 @@ struct FTargetProcess
 		WriteProcessMemory(Process.ProcessHandle, (void*)address, &value, sizeof(T), NULL);
 	}
 
-	HANDLE InjectDLL(const std::string& dllPath);
-	std::future<HANDLE> InjectDLLAsync(const std::string& dllPath);
+	HANDLE InjectDLL(const std::string& DllPath);
+	std::future<HANDLE> InjectDLLAsync(const std::string& DllPath);
 	
 };
 

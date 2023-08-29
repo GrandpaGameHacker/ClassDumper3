@@ -26,6 +26,7 @@ public:
 	void Draw() override;
 protected:
 	void DrawClass();
+	void DrawCodeReferences();
 	void OnProcessSelectedDelegate(std::shared_ptr<FTargetProcess> Target, std::shared_ptr<RTTI> RTTI);
 	void OnClassSelectedDelegate(std::shared_ptr<_Class> InClass);
 	void RenameFunction(std::pair<const uintptr_t, std::string>* InFunction);

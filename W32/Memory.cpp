@@ -540,26 +540,53 @@ std::vector<FMemoryBlock> FTargetProcess::GetReadableMemory()
 	return Blocks;
 }
 
-std::vector<std::future<FMemoryBlock>> FTargetProcess::AsyncGetReadableMemory(bool bExecutable)
+std::vector<std::future<FMemoryBlock>> FTargetProcess::AsyncGetReadableMemory()
 {
 	std::vector<std::future<FMemoryBlock>> futures;
+
 	for (auto& Range : MemoryMap.Ranges)
 	{
-		if (Range.bReadable || (bExecutable && Range.bExecutable))
+		if (Range.bReadable)
 		{
-			// get a future using async launch lambda
 			auto future = std::async(std::launch::async, [&Range, &Process = Process]()
 				{
 					FMemoryBlock Block(Range.Start, Range.Size());
-					
+
 					if (!Block.Copy) return Block;
-					
+
 					ReadProcessMemory(Process.ProcessHandle, Block.Address, Block.Copy, Block.Size, NULL);
 					return Block;
 				});
 			futures.push_back(std::move(future));
 		}
+		
 	}
+
+	return futures;
+}
+
+std::vector<std::future<FMemoryBlock>> FTargetProcess::AsyncGetExecutableMemory()
+{
+	std::vector<std::future<FMemoryBlock>> futures;
+
+	for (auto& Range : MemoryMap.Ranges)
+	{
+		if (Range.bExecutable)
+		{
+			auto future = std::async(std::launch::async, [&Range, &Process = Process]()
+				{
+					FMemoryBlock Block(Range.Start, Range.Size());
+
+					if (!Block.Copy) return Block;
+
+					ReadProcessMemory(Process.ProcessHandle, Block.Address, Block.Copy, Block.Size, NULL);
+					return Block;
+				});
+			futures.push_back(std::move(future));
+		}
+
+	}
+
 	return futures;
 }
 

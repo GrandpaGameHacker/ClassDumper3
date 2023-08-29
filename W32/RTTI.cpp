@@ -108,8 +108,10 @@ std::string RTTI::GetLoadingStage()
 std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<_Class>& CClass)
 {
 	if (!CClass) return std::vector<uintptr_t>();
+
+	bool bUse64BitScanner = IsRunning64Bits();
 	
-	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetReadableMemory(true);
+	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetExecutableMemory();
 	std::vector<FMemoryBlock> BlocksToFree;
 	std::vector<uintptr_t> References;
 	
@@ -123,16 +125,27 @@ std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<_Class>
 		
 		uintptr_t MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy);
 		uintptr_t MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
-		
+	
+
 		for (uintptr_t i = MemoryBlockCopy; i < MemoryBlockCopy + MemoryBlock.Size; i++)
 		{
+			uintptr_t Candidate = 0;
 			uintptr_t RealAddress = i - MemoryBlockCopy + MemoryBlockAddress;
-			uintptr_t Candidate = *(DWORD*)i;
-			Candidate += RealAddress + 4;
+			
+			if(bUse64BitScanner)
+			{
+				Candidate = *(DWORD*)i;
+				Candidate += RealAddress + 4;	
+			}
+			else
+			{
+				Candidate = *(uintptr_t*)i;
+			}
+			
 			if (Candidate == CClass->VTable)
 			{
 				// log reference
-				ClassDumper3::LogF("Found reference to %s at 0x%llX", CClass->Name.c_str(), RealAddress);
+				ClassDumper3::LogF("Found reference to %s at 0x%p", CClass->Name.c_str(), RealAddress);
 				References.push_back(RealAddress);
 			}
 		}
@@ -144,22 +157,73 @@ std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<_Class>
 	}
 	
 	CClass->CodeReferences = References;
-	bIsScanningForCodeReferences.store(false, std::memory_order_release);
+	bIsScanning.store(false, std::memory_order_release);
 	return References;
+}
+
+std::vector<uintptr_t> RTTI::ScanForClassInstances(const std::shared_ptr<_Class>& CClass)
+{
+	if (!CClass) return std::vector<uintptr_t>();
+
+	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetReadableMemory();
+	std::vector<FMemoryBlock> BlocksToFree;
+	std::vector<uintptr_t> Instances;
+
+	for (auto& Block : Blocks)
+	{
+		FMemoryBlock MemoryBlock = Block.get();
+		if (MemoryBlock.Size == 0) continue;
+		if (!MemoryBlock.Copy) continue;
+
+		BlocksToFree.push_back(MemoryBlock);
+
+		uintptr_t MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy);
+		uintptr_t MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
+
+		for (uintptr_t i = MemoryBlockCopy; i < MemoryBlockCopy + MemoryBlock.Size; i+=4)
+		{
+			uintptr_t RealAddress = i - MemoryBlockCopy + MemoryBlockAddress;
+			uintptr_t Candidate = *(uintptr_t*)i;
+			if (Candidate == CClass->VTable)
+			{
+				// log reference
+				ClassDumper3::LogF("Found %s Instance at 0x%p", CClass->Name.c_str(), RealAddress);
+				Instances.push_back(RealAddress);
+			}
+		}
+	}
+
+	for (FMemoryBlock& Block : BlocksToFree)
+	{
+		Block.FreeBlock();
+	}
+
+	CClass->ClassInstances = Instances;
+	bIsScanning.store(false, std::memory_order_release);
+	return Instances;
 }
 
 void RTTI::ScanForCodeReferencesAsync(const std::shared_ptr<_Class>& CClass)
 {
-	if (bIsScanningForCodeReferences.load(std::memory_order_acquire)) return;
+	if (bIsScanning.load(std::memory_order_acquire)) return;
 
-	bIsScanningForCodeReferences.store(true, std::memory_order_release);
-	ScanForCodeReferencesThread = std::thread(&RTTI::ScanForCodeReferences, this, CClass);
-	ScanForCodeReferencesThread.detach();
+	bIsScanning.store(true, std::memory_order_release);
+	ScannerThread = std::thread(&RTTI::ScanForCodeReferences, this, CClass);
+	ScannerThread.detach();
 }
 
-bool RTTI::IsAsyncScanningForCodeReferences()
+void RTTI::ScanForClassInstancesAsync(const std::shared_ptr<_Class>& CClass)
 {
-	if (!bIsScanningForCodeReferences.load(std::memory_order_acquire))
+	if (bIsScanning.load(std::memory_order_acquire)) return;
+
+	bIsScanning.store(true, std::memory_order_release);
+	ScannerThread = std::thread(&RTTI::ScanForClassInstances, this, CClass);
+	ScannerThread.detach();
+}
+
+bool RTTI::IsAsyncScanning()
+{
+	if (!bIsScanning.load(std::memory_order_acquire))
 	{
 		return false;
 	}
@@ -167,10 +231,6 @@ bool RTTI::IsAsyncScanningForCodeReferences()
 	return true;
 }
 
-std::vector<uintptr_t> RTTI::ScanForClassInstances(const std::shared_ptr<_Class>& CClass)
-{
-	return std::vector<uintptr_t>();
-}
 
 void RTTI::FindValidSections()
 {

@@ -16,6 +16,7 @@ public:
 	void LogF(const char* Format, ...);
 	void Clear();
 protected:
+	void WrapHistoryMax();
 	std::vector<std::string> LogHistory;
 	size_t MaxLogHistory = 100;
 	std::mutex LogMutex;

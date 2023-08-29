@@ -37,10 +37,11 @@ void ClassInspector::InitializeBindings()
 
 void ClassInspector::Draw()
 {
-	if (!SelectedClass) return;
-	
+	if (!SelectedClass)
+		return;
+
 	const char* WindowTitle = "Class Inspector###";
-		
+
 	if (SelectedClass->bInterface)
 	{
 		WindowTitle = "Interface Inspector###";
@@ -49,24 +50,31 @@ void ClassInspector::Draw()
 	{
 		WindowTitle = "Structure Inspector###";
 	}
-		
+
 	ImGui::Begin(WindowTitle, nullptr, ImGuiWindowFlags_NoCollapse);
-		
+
+	ImGui::Columns(2, nullptr, false);
+	ImGui::SetColumnWidth(0, ImGui::GetWindowWidth() / 2);
+
 	if (ImGui::Button("Copy To Clipboard"))
 	{
 		CopyInfo();
 	}
 
-	ImGui::SameLine();
-		
 	if (ImGui::Button("Scan for Code References"))
 	{
 		RTTIObserver->ScanForCodeReferencesAsync(SelectedClass);
 	}
+	ImGui::SameLine();
 
-	if (RTTIObserver->IsAsyncScanningForCodeReferences())
+	if (ImGui::Button("Scan for Instances"))
 	{
-		ImGui::Text("Scanning for code references...");
+		RTTIObserver->ScanForClassInstancesAsync(SelectedClass);
+	}
+
+	if (RTTIObserver->IsAsyncScanning())
+	{
+		ImGui::Text("Performing Scan Operation...");
 		ImGui::SameLine();
 		ImGui::Spinner("Spinner", 10, 10, 0xFF0000FF);
 	}
@@ -75,6 +83,7 @@ void ClassInspector::Draw()
 	ImGui::Text("Name: %s", SelectedClass->Name.c_str());
 
 	ImGui::Text("CompleteObjectLocator: 0x%s", IntegerToHexStr(SelectedClass->CompleteObjectLocator).c_str());
+
 	ImGui::Text("Num Inherited: %d", SelectedClass->Parents.size());
 	{
 		ScopedColor Color(ImGuiCol_Text, Color::Red);
@@ -90,20 +99,20 @@ void ClassInspector::Draw()
 		for (std::weak_ptr<_Class> InterfaceWeak : SelectedClass->Interfaces)
 		{
 			std::shared_ptr<_Class> Interface = InterfaceWeak.lock();
-			if (!Interface) continue;
+			if (!Interface)
+				continue;
 			ImGui::Text(Interface->Name.c_str());
 		}
 	}
 
 	ImGui::Text("Virtual Function Table: 0x%s", IntegerToHexStr(SelectedClass->VTable).c_str());
-	ImGui::Text("Num Virtual Functions: %d", SelectedClass->Functions.size());
 
+	ImGui::Text("Num Virtual Functions: %d", SelectedClass->Functions.size());
 	{
 		ScopedColor Color(ImGuiCol_Text, Color::Green);
 		int Index = 0;
-		for (auto& Function: SelectedClass->FunctionNames)
+		for (auto& Function : SelectedClass->FunctionNames)
 		{
-				
 			std::string FunctionText = "%d - " + IntegerToHexStr(Function.first) + " : " + Function.second;
 			ImGui::Text(FunctionText.c_str(), Index);
 			if (ImGui::IsItemClicked(EMouseButton::Left))
@@ -114,34 +123,56 @@ void ClassInspector::Draw()
 			{
 				RenameFunction(&Function);
 			}
-
 			Index++;
 		}
 	}
+	ImGui::NextColumn();
+	DrawClassReferences();
 
-	DrawCodeReferences();
 	ImGui::End();
 }
 
-void ClassInspector::DrawCodeReferences()
+
+void ClassInspector::DrawClassReferences()
 {
 	if (!SelectedClass) return;
-	if (RTTIObserver->IsAsyncScanningForCodeReferences()) return;
+
 	
 	ImGui::Text("Code References:");
-	ImGui::BeginChildFrame(2, ImVec2(0, 0), ImGuiWindowFlags_NoCollapse);
-	for (auto& CodeReference : SelectedClass->CodeReferences)
+	ImGui::BeginChildFrame(2, {300,300});
+	if (!RTTIObserver->IsAsyncScanning())
 	{
-		std::string CodeRefString = "0x" + IntegerToHexStr(CodeReference);
+		for (auto& CodeReference : SelectedClass->CodeReferences)
+		{
+			std::string CodeRefString = "0x" + IntegerToHexStr(CodeReference);
 
-		ImGui::Text(CodeRefString.c_str());
-		if (ImGui::IsItemClicked(EMouseButton::Left))
-		{
-			// disassemble window
+			ImGui::Text(CodeRefString.c_str());
+			if (ImGui::IsItemClicked(EMouseButton::Left))
+			{
+				// disassemble window
+			}
+			else if (ImGui::IsItemClicked(EMouseButton::Right))
+			{
+				ClassDumper3::CopyToClipboard(CodeRefString);
+			}
 		}
-		else if (ImGui::IsItemClicked(EMouseButton::Right))
+	}
+	ImGui::EndChildFrame();
+
+	ImGui::Text("Instances:");
+	ImGui::BeginChildFrame(3, { 300,300 }, ImGuiWindowFlags_NoCollapse);
+	if (!RTTIObserver->IsAsyncScanning())
+	{
+		for (auto& Instance : SelectedClass->ClassInstances)
 		{
-			ClassDumper3::CopyToClipboard(CodeRefString);
+			std::string InstanceStr = "0x" + IntegerToHexStr(Instance);
+
+			ImGui::Text(InstanceStr.c_str());
+
+			if (ImGui::IsItemClicked(EMouseButton::Right))
+			{
+				ClassDumper3::CopyToClipboard(InstanceStr);
+			}
 		}
 	}
 	ImGui::EndChildFrame();

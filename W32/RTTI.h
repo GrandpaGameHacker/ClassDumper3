@@ -78,6 +78,7 @@ struct _Class
 	std::vector<std::shared_ptr<_ParentClassNode>> Parents;
 	std::vector<std::weak_ptr<_Class>> Interfaces;
 	std::vector<uintptr_t> CodeReferences;
+	std::vector<uintptr_t> ClassInstances;
 
 	bool bMultipleInheritance = false;
 	bool bVirtualInheritance = false;
@@ -126,11 +127,12 @@ public:
 	std::string GetLoadingStage();
 
 	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<_Class>& CClass);
+	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<_Class>& CClass);
 	
 	void ScanForCodeReferencesAsync(const std::shared_ptr<_Class>& CClass);
-	bool IsAsyncScanningForCodeReferences();
+	void ScanForClassInstancesAsync(const std::shared_ptr<_Class>& CClass);
+	bool IsAsyncScanning();
 	
-	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<_Class>& CClass);
 
 protected:
 	void FindValidSections();
@@ -157,8 +159,8 @@ protected:
 	std::string LoadingStage = "Not Loading Anything...";
 	std::string LoadingStageCache;
 
-	std::atomic_bool bIsScanningForCodeReferences = false;
-	std::thread ScanForCodeReferencesThread;
+	std::atomic_bool bIsScanning = false;
+	std::thread ScannerThread;
 
 	
 	FModule* Module;

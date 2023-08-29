@@ -2,6 +2,7 @@
 
 LogWindow::LogWindow()
 {
+	LogHistory.reserve(MaxLogHistory);
 }
 
 LogWindow::~LogWindow()
@@ -51,16 +52,26 @@ void LogWindow::Log(const std::string& InLog)
 {
 	std::scoped_lock Lock(LogMutex);
 	LogHistory.push_back(InLog);
+	WrapHistoryMax();
 }
 
 void LogWindow::Log(const char* InLog)
 {
 	std::scoped_lock Lock(LogMutex);
 	LogHistory.push_back(InLog);
+	WrapHistoryMax();
 }
 
 void LogWindow::Clear()
 {
 	std::scoped_lock Lock(LogMutex);
 	LogHistory.clear();
+}
+
+void LogWindow::WrapHistoryMax()
+{
+	if (LogHistory.size() > MaxLogHistory)
+	{
+		LogHistory.erase(LogHistory.begin(), LogHistory.end() - MaxLogHistory);
+	}
 }

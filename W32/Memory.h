@@ -228,7 +228,8 @@ struct FTargetProcess
 	FModule* GetModule(const std::string& moduleName);
 	FMemoryRange* GetMemoryRange(const uintptr_t Address);
 	std::vector<FMemoryBlock> GetReadableMemory();
-	std::vector<std::future<FMemoryBlock>> AsyncGetReadableMemory(bool bExecutable = false);
+	std::vector<std::future<FMemoryBlock>> AsyncGetReadableMemory();
+	std::vector<std::future<FMemoryBlock>> AsyncGetExecutableMemory();
 	FModuleSection* GetModuleSection(uintptr_t address);
 	DWORD SetProtection(uintptr_t address, size_t size, DWORD protection);
 

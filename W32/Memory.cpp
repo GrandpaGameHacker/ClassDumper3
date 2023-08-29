@@ -1,6 +1,27 @@
 #include "Memory.h"
 #include "../ClassDumper3.h"
 
+bool ShouldIgnoreProcess(const std::string& ProcessName)
+{
+	static const std::vector<std::string> IgnoreList
+	{
+		"[System Process]",
+		"svchost.exe",
+		"explorer.exe",
+		"conhost.exe"
+	};
+
+	for (const std::string& Name : IgnoreList)
+	{
+		if (ProcessName == Name)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 std::vector<FProcessListItem> GetProcessList()
 {
 	std::vector<FProcessListItem> ProcessList;
@@ -42,7 +63,7 @@ std::vector<FProcessListItem> GetProcessList()
 			CloseHandle(ModuleSnapshotHandle);
 		}
 
-		if (IsSameBitsProcess(ProcessItem.Path))
+		if (IsSameBitsProcess(ProcessItem.Path) && !ShouldIgnoreProcess(ProcessItem.Name))
 		{
 			ProcessList.push_back(ProcessItem);
 		}
@@ -95,7 +116,7 @@ std::vector<FProcessListItem> GetProcessList(const std::string& Filter)
 				CloseHandle(ModuleSnapshotHandle);
 			}
 
-			if (IsSameBitsProcess(ProcessItem.Path))
+			if (IsSameBitsProcess(ProcessItem.Path) && !ShouldIgnoreProcess(ProcessItem.Name))
 			{
 				List.push_back(ProcessItem);
 			}

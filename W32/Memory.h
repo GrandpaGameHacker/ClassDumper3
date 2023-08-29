@@ -30,6 +30,7 @@ struct FProcessListItem
 	std::string Path;
 };
 
+bool ShouldIgnoreProcess(const std::string& ProcessName);
 std::vector<FProcessListItem> GetProcessList();
 std::vector<FProcessListItem> GetProcessList(const std::string& Filter);
 

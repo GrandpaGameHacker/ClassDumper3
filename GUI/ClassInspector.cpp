@@ -122,10 +122,16 @@ void ClassInspector::DrawCodeReferences()
 	ImGui::BeginChildFrame(2, ImVec2(0, 0), ImGuiWindowFlags_NoCollapse);
 	for (auto& CodeReference : SelectedClass->CodeReferences)
 	{
-		ImGui::Text("0x%s", IntegerToHexStr(CodeReference).c_str());
+		std::string CodeRefString = "0x" + IntegerToHexStr(CodeReference);
+
+		ImGui::Text(CodeRefString.c_str());
 		if (ImGui::IsItemClicked(EMouseButton::Left))
 		{
 			// disassemble window
+		}
+		else if (ImGui::IsItemClicked(EMouseButton::Right))
+		{
+			ClassDumper3::CopyToClipboard(CodeRefString);
 		}
 	}
 	ImGui::EndChildFrame();
@@ -175,28 +181,8 @@ void ClassInspector::CopyInfo()
     {
 		Info += IntegerToHexStr(FunctionName.first) + " : " + FunctionName.second + "\n";
     }
-    
-    // Copy to clipboard
-    if (OpenClipboard(nullptr))
-    {
-        EmptyClipboard();
-        HGLOBAL ClipboardDataHandle = GlobalAlloc(GMEM_MOVEABLE, Info.size() + 1);
 
-        if (ClipboardDataHandle != 0)
-        {
-            char* PCHData;
-			PCHData = (char*)GlobalLock(ClipboardDataHandle);
-
-            if (PCHData)
-            {
-                strcpy_s(PCHData, Info.size() + 1, Info.c_str());
-                GlobalUnlock(ClipboardDataHandle);
-                SetClipboardData(CF_TEXT, ClipboardDataHandle);
-            }
-        }
-
-        CloseClipboard();
-    }
+	ClassDumper3::CopyToClipboard(Info);
 }
 
 

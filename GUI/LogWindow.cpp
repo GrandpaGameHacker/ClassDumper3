@@ -23,6 +23,12 @@ void LogWindow::Draw()
 	
 	ImGui::Begin("Log", nullptr, ImGuiWindowFlags_NoCollapse);
 	size_t Idx = 0;
+	
+	if (ImGui::Button("Clear Log"))
+	{
+		Clear();
+	}
+	
 	ImGui::BeginChild("Scrolling");
 	{
 		std::scoped_lock Lock(LogMutex);

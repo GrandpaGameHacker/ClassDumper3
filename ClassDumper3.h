@@ -23,6 +23,8 @@ public:
 	static void LogF(std::string Format, ...);
 	static void LogF(const char* Format, ...);
 	static void ClearLog();
+
+	static void CopyToClipboard(const std::string& InString);
 	
 	
 	HWND DXWindow;

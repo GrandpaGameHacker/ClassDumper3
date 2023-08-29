@@ -153,6 +153,31 @@ void ClassDumper3::ClearLog()
 	LogWnd->Clear();
 }
 
+void ClassDumper3::CopyToClipboard(const std::string& InString)
+{
+	// Copy to clipboard
+	if (OpenClipboard(nullptr))
+	{
+		EmptyClipboard();
+		HGLOBAL ClipboardDataHandle = GlobalAlloc(GMEM_MOVEABLE, InString.size() + 1);
+
+		if (ClipboardDataHandle != 0)
+		{
+			char* PCHData;
+			PCHData = (char*)GlobalLock(ClipboardDataHandle);
+
+			if (PCHData)
+			{
+				strcpy_s(PCHData, InString.size() + 1, InString.c_str());
+				GlobalUnlock(ClipboardDataHandle);
+				SetClipboardData(CF_TEXT, ClipboardDataHandle);
+			}
+		}
+
+		CloseClipboard();
+	}
+}
+
 int main()
 {
 	ClassDumper3 Dumper;

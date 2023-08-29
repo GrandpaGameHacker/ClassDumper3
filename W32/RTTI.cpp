@@ -144,7 +144,27 @@ std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<_Class>
 	}
 	
 	CClass->CodeReferences = References;
+	bIsScanningForCodeReferences.store(false, std::memory_order_release);
 	return References;
+}
+
+void RTTI::ScanForCodeReferencesAsync(const std::shared_ptr<_Class>& CClass)
+{
+	if (bIsScanningForCodeReferences.load(std::memory_order_acquire)) return;
+
+	bIsScanningForCodeReferences.store(true, std::memory_order_release);
+	ScanForCodeReferencesThread = std::thread(&RTTI::ScanForCodeReferences, this, CClass);
+	ScanForCodeReferencesThread.detach();
+}
+
+bool RTTI::IsAsyncScanningForCodeReferences()
+{
+	if (!bIsScanningForCodeReferences.load(std::memory_order_acquire))
+	{
+		return false;
+	}
+
+	return true;
 }
 
 std::vector<uintptr_t> RTTI::ScanForClassInstances(const std::shared_ptr<_Class>& CClass)

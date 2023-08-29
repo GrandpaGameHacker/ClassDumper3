@@ -1,7 +1,7 @@
 #include "MainWindow.h"
 #include "imgui_stl.h"
-#include "CustomWidgets.h"
 #include <iostream>
+#include "CustomWidgets.h"
 
 MainWindow::MainWindow()
 {

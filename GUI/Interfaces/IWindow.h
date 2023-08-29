@@ -2,7 +2,6 @@
 #include "imgui.h"
 #include <vector>
 #include <memory>
-
 enum EMouseButton
 {
 	Left,

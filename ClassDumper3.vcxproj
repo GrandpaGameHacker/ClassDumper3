@@ -139,6 +139,7 @@
   <ItemGroup>
     <ClCompile Include="ClassDumper3.cpp" />
     <ClCompile Include="GUI\ClassInspector.cpp" />
+    <ClCompile Include="GUI\CustomWidgets.cpp" />
     <ClCompile Include="gui\helpers\dx11\imgui_impl_dx11.cpp" />
     <ClCompile Include="gui\helpers\dx12\imgui_impl_dx12.cpp" />
     <ClCompile Include="gui\helpers\dx12\imgui_impl_win32.cpp" />

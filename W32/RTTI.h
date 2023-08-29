@@ -126,6 +126,10 @@ public:
 	std::string GetLoadingStage();
 
 	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<_Class>& CClass);
+	
+	void ScanForCodeReferencesAsync(const std::shared_ptr<_Class>& CClass);
+	bool IsAsyncScanningForCodeReferences();
+	
 	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<_Class>& CClass);
 
 protected:
@@ -149,10 +153,12 @@ protected:
 	std::atomic_bool bIsProcessing = false;
 	std::thread ProcessThread;
 	constexpr static size_t LoadingStageSize = 128;
-	
 	std::mutex LoadingStageMutex;
 	std::string LoadingStage = "Not Loading Anything...";
 	std::string LoadingStageCache;
+
+	std::atomic_bool bIsScanningForCodeReferences = false;
+	std::thread ScanForCodeReferencesThread;
 
 	
 	FModule* Module;

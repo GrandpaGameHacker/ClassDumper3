@@ -4,6 +4,7 @@
 #include "../Util/Strings.h"
 #include "imgui_stl.h"
 #include "../ClassDumper3.h"
+#include "CustomWidgets.h"
 
 ClassInspector::ClassInspector()
 {
@@ -60,9 +61,16 @@ void ClassInspector::Draw()
 		
 	if (ImGui::Button("Scan for Code References"))
 	{
-		RTTIObserver->ScanForCodeReferences(SelectedClass);
+		RTTIObserver->ScanForCodeReferencesAsync(SelectedClass);
 	}
-		
+
+	if (RTTIObserver->IsAsyncScanningForCodeReferences())
+	{
+		ImGui::Text("Scanning for code references...");
+		ImGui::SameLine();
+		ImGui::Spinner("Spinner", 10, 10, 0xFF0000FF);
+	}
+
 	ImGui::Separator();
 	ImGui::Text("Name: %s", SelectedClass->Name.c_str());
 
@@ -118,6 +126,8 @@ void ClassInspector::Draw()
 void ClassInspector::DrawCodeReferences()
 {
 	if (!SelectedClass) return;
+	if (RTTIObserver->IsAsyncScanningForCodeReferences()) return;
+	
 	ImGui::Text("Code References:");
 	ImGui::BeginChildFrame(2, ImVec2(0, 0), ImGuiWindowFlags_NoCollapse);
 	for (auto& CodeReference : SelectedClass->CodeReferences)

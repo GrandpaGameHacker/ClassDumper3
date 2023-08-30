@@ -84,7 +84,7 @@ void MainWindow::SelectProcess()
 	if (RTTIObserver && RTTIObserver->IsAsyncProcessing()) return;
 	if (Target && Target->IsValid())
 	{
-		RTTIObserver = std::make_shared<RTTI>(Target.get(), selectedProcessName);
+		RTTIObserver = std::make_shared<RTTI>(Target.get(), Target->Process.ProcessName);
 		RTTIObserver->ProcessRTTIAsync();
 		OnProcessSelected(Target, RTTIObserver);
 	}

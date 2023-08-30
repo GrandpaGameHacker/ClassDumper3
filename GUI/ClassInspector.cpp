@@ -89,7 +89,17 @@ void ClassInspector::Draw()
 		ScopedColor Color(ImGuiCol_Text, Color::Red);
 		for (std::shared_ptr<_ParentClassNode> Parent : SelectedClass->Parents)
 		{
-			ImGui::Text(Parent->Name.c_str());
+			static const std::string Indent = "\t";
+			std::string IndentText = "";
+			std::string ParentText = Parent->Name;
+			
+			for (size_t i = 1; i < Parent->TreeDepth; i++)
+			{
+				IndentText.append(Indent);
+			}
+
+			ParentText = IndentText + ParentText;
+			ImGui::Text(ParentText.c_str());
 		}
 	}
 

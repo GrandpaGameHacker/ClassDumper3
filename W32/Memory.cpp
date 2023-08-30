@@ -477,7 +477,7 @@ void FTargetProcess::Setup(const FProcess& InProcess)
 
 bool FTargetProcess::IsValid()
 {
-	return Process.IsValid();
+	return Process.IsValid() && ModuleMap.Modules.size();
 }
 
 FModule* FTargetProcess::GetModule(const std::string& moduleName)

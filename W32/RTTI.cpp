@@ -19,7 +19,7 @@ RTTI::RTTI(FTargetProcess* InProcess, std::string InModuleName)
 	}
 }
 
-std::shared_ptr<_Class> RTTI::Find(uintptr_t VTable)
+std::shared_ptr<ClassMetaData> RTTI::Find(uintptr_t VTable)
 {
 	auto it = VTableClassMap.find(VTable);
 	if (it != VTableClassMap.end())
@@ -29,7 +29,7 @@ std::shared_ptr<_Class> RTTI::Find(uintptr_t VTable)
 	return nullptr;
 }
 
-std::shared_ptr<_Class> RTTI::FindFirst(const std::string& ClassName)
+std::shared_ptr<ClassMetaData> RTTI::FindFirst(const std::string& ClassName)
 {
 	auto it = NameClassMap.find(ClassName);
 	if (it != NameClassMap.end())
@@ -40,9 +40,9 @@ std::shared_ptr<_Class> RTTI::FindFirst(const std::string& ClassName)
 	return nullptr;
 }
 
-std::vector<std::shared_ptr<_Class>> RTTI::FindAll(const std::string& ClassName)
+std::vector<std::shared_ptr<ClassMetaData>> RTTI::FindAll(const std::string& ClassName)
 {
-	std::vector<std::shared_ptr<_Class>> Classes;
+	std::vector<std::shared_ptr<ClassMetaData>> Classes;
 	std::string LowerClassName = ClassName;
 	std::transform(LowerClassName.begin(), LowerClassName.end(), LowerClassName.begin(), ::tolower);
 
@@ -60,7 +60,7 @@ std::vector<std::shared_ptr<_Class>> RTTI::FindAll(const std::string& ClassName)
 	return Classes;
 }
 
-std::vector<std::shared_ptr<_Class>> RTTI::GetClasses()
+std::vector<std::shared_ptr<ClassMetaData>> RTTI::GetClasses()
 {
 	return Classes;
 }
@@ -68,12 +68,14 @@ std::vector<std::shared_ptr<_Class>> RTTI::GetClasses()
 void RTTI::ProcessRTTI()
 {
 	FindValidSections();
-
-	ScanForClasses();
+	
+	std::vector<PotentialClass> PotentialClasses;
+	
+	ScanForClasses(PotentialClasses);
 
 	if (PotentialClasses.size() > 0)
 	{
-		ValidateClasses();
+		ValidateClasses(PotentialClasses);
 	}
 
 	bIsProcessing.store(false, std::memory_order_release);
@@ -105,7 +107,7 @@ std::string RTTI::GetLoadingStage()
 	return LoadingStageCache;
 }
 
-std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<_Class>& CClass)
+std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CClass)
 {
 	if (!CClass) return std::vector<uintptr_t>();
 
@@ -161,7 +163,7 @@ std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<_Class>
 	return References;
 }
 
-std::vector<uintptr_t> RTTI::ScanForClassInstances(const std::shared_ptr<_Class>& CClass)
+std::vector<uintptr_t> RTTI::ScanForClassInstances(const std::shared_ptr<ClassMetaData>& CClass)
 {
 	if (!CClass) return std::vector<uintptr_t>();
 
@@ -203,7 +205,7 @@ std::vector<uintptr_t> RTTI::ScanForClassInstances(const std::shared_ptr<_Class>
 	return Instances;
 }
 
-void RTTI::ScanForCodeReferencesAsync(const std::shared_ptr<_Class>& CClass)
+void RTTI::ScanForCodeReferencesAsync(const std::shared_ptr<ClassMetaData>& CClass)
 {
 	if (bIsScanning.load(std::memory_order_acquire)) return;
 
@@ -212,7 +214,7 @@ void RTTI::ScanForCodeReferencesAsync(const std::shared_ptr<_Class>& CClass)
 	ScannerThread.detach();
 }
 
-void RTTI::ScanForClassInstancesAsync(const std::shared_ptr<_Class>& CClass)
+void RTTI::ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CClass)
 {
 	if (bIsScanning.load(std::memory_order_acquire)) return;
 
@@ -285,10 +287,9 @@ bool RTTI::IsInReadOnlySection(uintptr_t Address)
 	return false;
 }
 
-void RTTI::ScanForClasses()
+void RTTI::ScanForClasses(std::vector<PotentialClass>& PotentialClasses)
 {
 	SetLoadingStage("Scanning for potential classes...");
-	
 	uintptr_t* SectionBuffer;
 	size_t TotalSectionSize = 0;
 
@@ -337,14 +338,14 @@ void RTTI::ScanForClasses()
 	
 	free(SectionBuffer);
 	ClassDumper3::LogF("Found %u potential classes in %s\n", PotentialClasses.size(), ModuleName.c_str()); 
-	
-	PotentialClassesFinal.reserve(PotentialClasses.size());
-	Classes.reserve(PotentialClasses.size());
 }
 
-void RTTI::ValidateClasses()
+void RTTI::ValidateClasses(std::vector<PotentialClass>& PotentialClasses)
 {
 	SetLoadingStage("Validating potential classes...");
+	
+	std::vector<PotentialClass> ValidatedClasses;
+	ValidatedClasses.reserve(PotentialClasses.size());
 	
 	DWORD signatureMatch = IsRunning64Bits() ? 1 : 0;
 	
@@ -380,41 +381,37 @@ void RTTI::ValidateClasses()
 		PClass.Name = Name;
 		PClass.DemangledName = DemangleMSVC(Name);
 
-		PotentialClassesFinal.push_back(PClass);
+		ValidatedClasses.push_back(PClass);
 	}
-
-	PotentialClasses.clear();
-	PotentialClasses.shrink_to_fit();
 	
-	SortClasses();
-	ProcessClasses();
-
+	ProcessClasses(ValidatedClasses);
+	
 	ClassDumper3::LogF("Found %u valid classes in %s\n", Classes.size(), ModuleName.c_str());
 }
 
-void RTTI::ProcessClasses()
+void RTTI::ProcessClasses(std::vector<PotentialClass>& FinalClasses)
 {
 	SetLoadingStage("Processing class data...");
-	
+
 	std::string LastClassName = "";
-	std::shared_ptr<_Class> LastClass = nullptr;
-	
-	for (PotentialClass& PClassFinal : PotentialClassesFinal)
+	std::shared_ptr<ClassMetaData> LastClass = nullptr;
+
+	for (PotentialClass& PClassFinal : FinalClasses)
 	{
 		RTTICompleteObjectLocator CompleteObjectLocator;
 		RTTIClassHierarchyDescriptor ClassHierarchyDescriptor;
-		
+
 		Process->Read(PClassFinal.CompleteObjectLocator, &CompleteObjectLocator, sizeof(RTTICompleteObjectLocator));
 		uintptr_t pClassDescriptor = CompleteObjectLocator.pClassDescriptor + ModuleBase;
-		
+
 		Process->Read(pClassDescriptor, &ClassHierarchyDescriptor, sizeof(RTTIClassHierarchyDescriptor));
 
-		std::shared_ptr<_Class> ValidClass = std::make_shared<_Class>();
+		std::shared_ptr<ClassMetaData> ValidClass = std::make_shared<ClassMetaData>();
 		ValidClass->CompleteObjectLocator = PClassFinal.CompleteObjectLocator;
 		ValidClass->VTable = PClassFinal.VTable;
 		ValidClass->MangledName = PClassFinal.Name;
 		ValidClass->Name = PClassFinal.DemangledName;
-		
+
 		FilterSymbol(ValidClass->Name);
 
 		ValidClass->VTableOffset = CompleteObjectLocator.offset;
@@ -455,38 +452,41 @@ void RTTI::ProcessClasses()
 		}
 
 		EnumerateVirtualFunctions(ValidClass);
+
 		Classes.push_back(ValidClass);
-		
-		VTableClassMap.insert(std::pair<uintptr_t, std::shared_ptr<_Class>>(ValidClass->VTable, ValidClass));
-		NameClassMap.insert(std::pair<std::string, std::shared_ptr<_Class>>(ValidClass->Name, ValidClass));
+		VTableClassMap.insert(std::pair<uintptr_t, std::shared_ptr<ClassMetaData>>(ValidClass->VTable, ValidClass));
+		NameClassMap.insert(std::pair<std::string, std::shared_ptr<ClassMetaData>>(ValidClass->Name, ValidClass));
 	}
-
-	PotentialClassesFinal.clear();
-
-	// process super classes
-	SetLoadingStage("Processing super class data...");
 	
+	ProcessParentClasses();
+}
+
+void RTTI::ProcessParentClasses()
+{
+	// process parent classes
+	SetLoadingStage("Processing parent class data...");
+
 	int interfaceCount = 0;
-	
-	for (std::shared_ptr<_Class>& CClass : Classes)
+
+	for (std::shared_ptr<ClassMetaData>& CClass : Classes)
 	{
 		if (CClass->numBaseClasses > 1)
 		{
 			// read class array (skip the first one)
 			std::unique_ptr<DWORD[]> baseClassArray = std::make_unique<DWORD[]>(0x4000);
-			
+
 			RTTICompleteObjectLocator CompleteObjectLocator;
 			RTTIClassHierarchyDescriptor ClassHierarchyDescriptor;
-			
+
 			std::vector<uintptr_t> BaseClasses;
 			BaseClasses.reserve(CClass->numBaseClasses);
-		
+
 			Process->Read(CClass->CompleteObjectLocator, &CompleteObjectLocator, sizeof(RTTICompleteObjectLocator));
 
 			uintptr_t pClassDescriptor = CompleteObjectLocator.pClassDescriptor + ModuleBase;
-			
+
 			Process->Read(pClassDescriptor, &ClassHierarchyDescriptor, sizeof(RTTIClassHierarchyDescriptor));
-			
+
 			uintptr_t pBaseClassArray = ClassHierarchyDescriptor.pBaseClassArray + ModuleBase;
 			Process->Read(pBaseClassArray, baseClassArray.get(), sizeof(uintptr_t) * CClass->numBaseClasses - 1);
 
@@ -501,15 +501,15 @@ void RTTI::ProcessClasses()
 			for (unsigned int i = 0; i < CClass->numBaseClasses - 1; i++)
 			{
 				RTTIBaseClassDescriptor BaseClassDescriptor;
-				std::shared_ptr<_ParentClassNode> ParentClassNode = std::make_shared<_ParentClassNode>();
+				std::shared_ptr<ParentClass> ParentClassNode = std::make_shared<ParentClass>();
 				Process->Read(BaseClasses[i], &BaseClassDescriptor, sizeof(RTTIBaseClassDescriptor));
 
 				// process child name
 				char name[StandardBufferSize];
-				
+
 				Process->Read((uintptr_t)BaseClassDescriptor.pTypeDescriptor + ModuleBase + offsetof(RTTITypeDescriptor, name), name, StandardBufferSize);
 				name[StandardBufferSize - 1] = 0;
-				
+
 				ParentClassNode->MangledName = name;
 				ParentClassNode->Name = DemangleMSVC(name);
 				ParentClassNode->attributes = BaseClassDescriptor.attributes;
@@ -543,7 +543,7 @@ void RTTI::ProcessClasses()
 	}
 }
 
-void RTTI::EnumerateVirtualFunctions(std::shared_ptr<_Class>& CClass)
+void RTTI::EnumerateVirtualFunctions(std::shared_ptr<ClassMetaData>& CClass)
 {
 	constexpr int MaximumVirtualFunctions = 0x4000;
 	static std::unique_ptr<uintptr_t[]> buffer = std::make_unique<uintptr_t[]>(MaximumVirtualFunctions);
@@ -601,13 +601,10 @@ std::string RTTI::DemangleMSVC(char* Symbol)
 	return std::string(StringBuffer);
 }
 
-void RTTI::SortClasses()
+void RTTI::SortClasses(std::vector<PotentialClass>& Classes)
 {
 	SetLoadingStage("Sorting classes...");
-	std::sort(PotentialClassesFinal.begin(), PotentialClassesFinal.end(), [=](PotentialClass a, PotentialClass b)
-		{
-			return a.DemangledName < b.DemangledName;
-		});
+	std::sort(Classes.begin(), Classes.end(), [=](PotentialClass a, PotentialClass b){ return a.DemangledName < b.DemangledName; });
 }
 
 void RTTI::FilterSymbol(std::string& Symbol)

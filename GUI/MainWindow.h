@@ -12,22 +12,24 @@ public:
 	~MainWindow();
 	void Draw() override;
 	
-	MulticastDelegate<std::shared_ptr<_Class>> OnClassSelected;
+	MulticastDelegate<std::shared_ptr<ClassMetaData>> OnClassSelected;
 	MulticastDelegate<std::shared_ptr<FTargetProcess>, std::shared_ptr<RTTI>> OnProcessSelected;
 protected:
 	void DrawProcessList();
+	void DrawModuleList();
 	void RefreshProcessList();
 	void SelectProcess();
 	void FilterClasses(const std::string& filter);
 	void DrawClassList();
-	void DrawClass(const std::shared_ptr<_Class>& cl);
+	void DrawClass(const std::shared_ptr<ClassMetaData>& cl);
 	
-	std::string selectedProcessName;
-	std::string processFilter;
-	std::string classFilter;
-	std::vector<std::shared_ptr<_Class>> filteredClassesCache;
+	std::string SelectedProcessName;
+	std::string SelectedModuleName;
+	std::string ProcessFilter;
+	std::string ClassFilter;
+	std::vector<std::shared_ptr<ClassMetaData>> FilteredClassesCache;
 	std::vector<FProcessListItem> ProcessList;
 	std::shared_ptr<FTargetProcess> Target;
 	std::shared_ptr<RTTI> RTTIObserver;
-	std::weak_ptr<_Class> SelectedClass;
+	std::weak_ptr<ClassMetaData> SelectedClass;
 };

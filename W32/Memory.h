@@ -226,6 +226,7 @@ struct FTargetProcess
 	bool IsValid();
 
 	FModule* GetModule(const std::string& moduleName);
+	inline std::vector<FModule>& GetModules() { return ModuleMap.Modules; };
 	FMemoryRange* GetMemoryRange(const uintptr_t Address);
 	std::vector<FMemoryBlock> GetReadableMemory();
 	std::vector<std::future<FMemoryBlock>> AsyncGetReadableMemory();

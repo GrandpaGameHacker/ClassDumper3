@@ -57,8 +57,8 @@ struct PotentialClass
 	std::string DemangledName;
 };
 
-struct _ParentClassNode;
-struct _Class
+struct ParentClass;
+struct ClassMetaData
 {
 	uintptr_t CompleteObjectLocator = 0;
 	uintptr_t VTable = 0;
@@ -75,8 +75,8 @@ struct _Class
 
 
 	DWORD numBaseClasses = 0;
-	std::vector<std::shared_ptr<_ParentClassNode>> Parents;
-	std::vector<std::weak_ptr<_Class>> Interfaces;
+	std::vector<std::shared_ptr<ParentClass>> Parents;
+	std::vector<std::weak_ptr<ClassMetaData>> Interfaces;
 	std::vector<uintptr_t> CodeReferences;
 	std::vector<uintptr_t> ClassInstances;
 
@@ -87,7 +87,7 @@ struct _Class
 	bool bInterface = false;
 };
 
-struct _ParentClassNode
+struct ParentClass
 {
 	// basic class info
 	std::string Name;
@@ -95,10 +95,13 @@ struct _ParentClassNode
 	DWORD numContainedBases = 0;
 	PMD where = { 0,0,0 };
 	DWORD attributes = 0;
+
 	// lowest child class (the root of the tree)
-	std::weak_ptr<_Class> ChildClass;
+	std::weak_ptr<ClassMetaData> ChildClass;
+	
 	// base class of this class (found by looking for class of the same name)
-	std::weak_ptr<_Class> Class;
+	std::weak_ptr<ClassMetaData> Class;
+	
 	// depth of the class in the tree
 	DWORD TreeDepth = 0;
 };
@@ -113,10 +116,10 @@ class RTTI
 {
 public:
 	RTTI(FTargetProcess* InProcess, std::string InModuleName);
-	std::shared_ptr<_Class> Find(uintptr_t VTable);
-	std::shared_ptr<_Class> FindFirst(const std::string& ClassName);
-	std::vector<std::shared_ptr<_Class>> FindAll(const std::string& ClassName);
-	std::vector<std::shared_ptr<_Class>> GetClasses();
+	std::shared_ptr<ClassMetaData> Find(uintptr_t VTable);
+	std::shared_ptr<ClassMetaData> FindFirst(const std::string& ClassName);
+	std::vector<std::shared_ptr<ClassMetaData>> FindAll(const std::string& ClassName);
+	std::vector<std::shared_ptr<ClassMetaData>> GetClasses();
 
 	void ProcessRTTI();
 	
@@ -126,11 +129,11 @@ public:
 
 	std::string GetLoadingStage();
 
-	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<_Class>& CClass);
-	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<_Class>& CClass);
+	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CClass);
+	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<ClassMetaData>& CClass);
 	
-	void ScanForCodeReferencesAsync(const std::shared_ptr<_Class>& CClass);
-	void ScanForClassInstancesAsync(const std::shared_ptr<_Class>& CClass);
+	void ScanForCodeReferencesAsync(const std::shared_ptr<ClassMetaData>& CClass);
+	void ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CClass);
 	bool IsAsyncScanning();
 	
 
@@ -139,15 +142,16 @@ protected:
 	bool IsInExecutableSection(uintptr_t Address);
 	bool IsInReadOnlySection(uintptr_t Address);
 	
-	void ScanForClasses();
-	void ValidateClasses();
-	void ProcessClasses();
+	void ScanForClasses(std::vector<PotentialClass>& PotentialClasses);
+	void ValidateClasses(std::vector<PotentialClass>& PotentialClasses);
+	void ProcessClasses(std::vector<PotentialClass>& FinalClasses);
+	void ProcessParentClasses();
 
 	// todo: name functions based on what class they are from...
-	void EnumerateVirtualFunctions(std::shared_ptr<_Class>& c);
+	void EnumerateVirtualFunctions(std::shared_ptr<ClassMetaData>& c);
 
 	std::string DemangleMSVC(char* Symbol);
-	void SortClasses();
+	void SortClasses(std::vector<PotentialClass>& Classes);
 	void FilterSymbol(std::string& Symbol);
 
 	void SetLoadingStage(std::string Stage);
@@ -170,9 +174,8 @@ protected:
 
 	std::vector<FModuleSection> ExecutableSections;
 	std::vector<FModuleSection> ReadOnlySections;
-	std::vector<PotentialClass> PotentialClasses;
-	std::vector<PotentialClass> PotentialClassesFinal;
-	std::vector<std::shared_ptr<_Class>> Classes;
-	std::unordered_map<uintptr_t, std::shared_ptr<_Class>> VTableClassMap;
-	std::unordered_map<std::string, std::shared_ptr<_Class>> NameClassMap;
+	
+	std::vector<std::shared_ptr<ClassMetaData>> Classes;
+	std::unordered_map<uintptr_t, std::shared_ptr<ClassMetaData>> VTableClassMap;
+	std::unordered_map<std::string, std::shared_ptr<ClassMetaData>> NameClassMap;
 };

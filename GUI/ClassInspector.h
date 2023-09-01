@@ -28,11 +28,11 @@ protected:
 	void DrawClass();
 	void DrawClassReferences();
 	void OnProcessSelectedDelegate(std::shared_ptr<FTargetProcess> Target, std::shared_ptr<RTTI> RTTI);
-	void OnClassSelectedDelegate(std::shared_ptr<_Class> InClass);
+	void OnClassSelectedDelegate(std::shared_ptr<ClassMetaData> InClass);
 	void RenameFunction(std::pair<const uintptr_t, std::string>* InFunction);
 	void CopyInfo();
 	
-	std::shared_ptr<_Class> SelectedClass;
+	std::shared_ptr<ClassMetaData> SelectedClass;
 	std::shared_ptr<FTargetProcess> Target;
 	std::shared_ptr<RTTI> RTTIObserver;
 

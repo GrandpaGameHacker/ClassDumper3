@@ -87,7 +87,7 @@ void ClassInspector::Draw()
 	ImGui::Text("Num Inherited: %d", SelectedClass->Parents.size());
 	{
 		ScopedColor Color(ImGuiCol_Text, Color::Red);
-		for (std::shared_ptr<_ParentClassNode> Parent : SelectedClass->Parents)
+		for (std::shared_ptr<ParentClass> Parent : SelectedClass->Parents)
 		{
 			static const std::string Indent = "\t";
 			std::string IndentText = "";
@@ -106,9 +106,9 @@ void ClassInspector::Draw()
 	ImGui::Text("Num Interfaces: %d", SelectedClass->Interfaces.size());
 	{
 		ScopedColor Color(ImGuiCol_Text, Color::Magenta);
-		for (std::weak_ptr<_Class> InterfaceWeak : SelectedClass->Interfaces)
+		for (std::weak_ptr<ClassMetaData> InterfaceWeak : SelectedClass->Interfaces)
 		{
-			std::shared_ptr<_Class> Interface = InterfaceWeak.lock();
+			std::shared_ptr<ClassMetaData> Interface = InterfaceWeak.lock();
 			if (!Interface)
 				continue;
 			ImGui::Text(Interface->Name.c_str());
@@ -194,7 +194,7 @@ void ClassInspector::OnProcessSelectedDelegate(std::shared_ptr<FTargetProcess> I
 	RTTIObserver = InRTTI;
 }
 
-void ClassInspector::OnClassSelectedDelegate(std::shared_ptr<_Class> InClass)
+void ClassInspector::OnClassSelectedDelegate(std::shared_ptr<ClassMetaData> InClass)
 {
 	SelectedClass = InClass;
 	Enable();
@@ -219,7 +219,7 @@ void ClassInspector::CopyInfo()
 	Info += "CompleteObjectLocator: 0x" + IntegerToHexStr(SelectedClass->CompleteObjectLocator) + "\n";
 	Info += "Num Inherited: " + std::to_string(SelectedClass->Parents.size()) + "\n";
 
-    for (std::shared_ptr<_ParentClassNode> parent : SelectedClass->Parents)
+    for (std::shared_ptr<ParentClass> parent : SelectedClass->Parents)
     {
 		Info += parent->Name + "\n";
     }

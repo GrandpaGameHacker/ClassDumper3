@@ -546,7 +546,7 @@ std::vector<std::future<FMemoryBlock>> FTargetProcess::AsyncGetReadableMemory()
 
 	for (auto& Range : MemoryMap.Ranges)
 	{
-		if (Range.bReadable)
+		if (Range.bReadable && !Range.bExecutable)
 		{
 			auto future = std::async(std::launch::async, [&Range, &Process = Process]()
 				{

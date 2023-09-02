@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <mutex>
+#include <fstream> 
 
 class LogWindow : public IWindow
 {
@@ -17,8 +18,10 @@ public:
 	void Clear();
 protected:
 	void WrapHistoryMax();
+	std::string GetCurrentDateTime();
 	std::vector<std::string> LogHistory;
 	size_t MaxLogHistory = 100;
 	std::mutex LogMutex;
+	std::ofstream LogFile;
 };
 

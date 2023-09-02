@@ -132,6 +132,12 @@ public:
 	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CClass);
 	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<ClassMetaData>& CClass);
 	
+	void ScanForAllCodeReferences();
+	void ScanForAllClassInstances();
+	
+	void ScanAll();
+	void ScanAllAsync();
+	
 	void ScanForCodeReferencesAsync(const std::shared_ptr<ClassMetaData>& CClass);
 	void ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CClass);
 	bool IsAsyncScanning();

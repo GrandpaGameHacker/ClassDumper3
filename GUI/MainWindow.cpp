@@ -67,6 +67,7 @@ void MainWindow::DrawProcessList()
 			}
 
 			SelectedProcessName = Process.Name;
+			SelectedModuleName = Target->ModuleMap.Modules[0].Name;
 		}
 	}
 	ImGui::EndCombo();
@@ -138,6 +139,14 @@ void MainWindow::DrawClassList()
 	else if (ClassFilter.empty() && !FilteredClassesCache.empty())
 	{
 		FilteredClassesCache.clear();
+	}
+
+	if (ImGui::Button("Scan All Classes (Slow)"))
+	{
+		for (auto& Class : RTTIObserver->GetClasses())
+		{
+			RTTIObserver->ScanAllAsync();
+		}
 	}
 
 	ImGui::BeginChildFrame(1, ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight()));

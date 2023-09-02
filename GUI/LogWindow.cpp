@@ -1,12 +1,18 @@
 #include "LogWindow.h"
+#include <chrono>
+#include <iomanip>
+#include <sstream> 
 
 LogWindow::LogWindow()
 {
 	LogHistory.reserve(MaxLogHistory);
+	std::string logFileName = "log_" + GetCurrentDateTime() + ".txt";
+	LogFile.open(logFileName, std::ios::out | std::ios::app);
 }
 
 LogWindow::~LogWindow()
 {
+	LogFile.close();
 }
 
 void LogWindow::Draw()
@@ -52,6 +58,7 @@ void LogWindow::Log(const std::string& InLog)
 {
 	std::scoped_lock Lock(LogMutex);
 	LogHistory.push_back(InLog);
+	LogFile << InLog << std::endl;
 	WrapHistoryMax();
 }
 
@@ -59,6 +66,7 @@ void LogWindow::Log(const char* InLog)
 {
 	std::scoped_lock Lock(LogMutex);
 	LogHistory.push_back(InLog);
+	LogFile << InLog << std::endl;
 	WrapHistoryMax();
 }
 
@@ -74,4 +82,14 @@ void LogWindow::WrapHistoryMax()
 	{
 		LogHistory.erase(LogHistory.begin(), LogHistory.end() - MaxLogHistory);
 	}
+}
+
+std::string LogWindow::GetCurrentDateTime()
+{
+	auto now = std::chrono::system_clock::now();
+	auto in_time_t = std::chrono::system_clock::to_time_t(now);
+
+	std::stringstream ss;
+	ss << std::put_time(std::localtime(&in_time_t), "%Y%m%d_%H%M%S");
+	return ss.str();
 }

@@ -209,7 +209,7 @@ std::vector<uintptr_t> RTTI::ScanForClassInstances(const std::shared_ptr<ClassMe
 
 void RTTI::ScanForAllCodeReferences()
 {
-	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetReadableMemory();
+	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetExecutableMemory();
 	std::vector<FMemoryBlock> BlocksToFree;
 	std::mutex mtx;
 

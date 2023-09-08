@@ -7,6 +7,7 @@
 #include "GUI/ClassInspector.h"
 #include "GUI/LogWindow.h"
 
+#include <mutex>
 #include <memory>
 
 class ClassDumper3
@@ -38,7 +39,9 @@ public:
 private:
 	std::shared_ptr<MainWindow> MainWnd;
 	std::shared_ptr<ClassInspector> InspectorWnd;
+	static const size_t LogBufferSize = 8192;
 	
 	friend LogWindow;
 	static std::shared_ptr<LogWindow> LogWnd;
+	static std::mutex LogMutex;
 };

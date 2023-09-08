@@ -1,6 +1,7 @@
 #include "ClassDumper3.h"
 
 std::shared_ptr<LogWindow> ClassDumper3::LogWnd = nullptr;
+std::mutex ClassDumper3::LogMutex;
 
 int ClassDumper3::Run()
 {
@@ -105,18 +106,24 @@ void ClassDumper3::GUILoop()
 
 void ClassDumper3::Log(const std::string& InLog)
 {
+	std::scoped_lock Lock(LogMutex);
+	
 	if (!LogWnd) return;
 	LogWnd->Log(InLog);
 }
 
 void ClassDumper3::Log(const char* InLog)
 {
+	std::scoped_lock Lock(LogMutex);
+	
 	if (!LogWnd) return;
 	LogWnd->Log(InLog);
 }
 
 void ClassDumper3::LogF(std::string Format, ...)
 {
+	std::scoped_lock Lock(LogMutex);
+	
 	if (!LogWnd) return;
 	const char* FormatC = Format.c_str();
 	if (!LogWnd) return;
@@ -124,7 +131,7 @@ void ClassDumper3::LogF(std::string Format, ...)
 	va_list Args;
 	va_start(Args, Format);
 
-	char Buffer[4096];
+	char Buffer[LogBufferSize] = { 0 };
 	vsnprintf_s(Buffer, sizeof(Buffer), FormatC, Args);
 
 	va_end(Args);
@@ -134,12 +141,14 @@ void ClassDumper3::LogF(std::string Format, ...)
 
 void ClassDumper3::LogF(const char* Format, ...)
 {
-	if (!LogWnd) return;
 
+	std::scoped_lock Lock(LogMutex);
+	
+	if (!LogWnd) return;
 	va_list Args;
 	va_start(Args, Format);
 
-	char Buffer[4096];
+	char Buffer[LogBufferSize] = { 0 };
 	vsnprintf_s(Buffer, sizeof(Buffer), Format, Args);
 
 	va_end(Args);
@@ -149,6 +158,8 @@ void ClassDumper3::LogF(const char* Format, ...)
 
 void ClassDumper3::ClearLog()
 {
+	std::scoped_lock Lock(LogMutex);
+	
 	if (!LogWnd) return;
 	LogWnd->Clear();
 }

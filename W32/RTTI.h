@@ -1,7 +1,6 @@
 #pragma once
 #include "Memory.h"
 #include <atomic>
-#include <queue>
 
 struct PMD
 {
@@ -49,7 +48,6 @@ struct RTTITypeDescriptor
 	char name = 0; // name of the class
 };
 
-
 struct PotentialClass
 {
 	uintptr_t CompleteObjectLocator = 0;
@@ -72,8 +70,7 @@ struct ClassMetaData
 	DWORD ConstructorDisplacementOffset = 0;
 
 	std::vector<uintptr_t> Functions;
-	std::map<uintptr_t, std::string> FunctionNames; // map of function names to addresses
-
+	std::map<uintptr_t, std::string> FunctionNames; // map of function addresses to names
 
 	DWORD numBaseClasses = 0;
 	std::vector<std::shared_ptr<ParentClass>> Parents;

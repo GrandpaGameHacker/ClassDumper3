@@ -37,7 +37,7 @@ void MainWindow::Draw()
 
     if (ImGui::Button("Refresh/Filter")) RefreshProcessList();
     ImGui::SameLine();
-    if (ImGui::Button("Select Process")) SelectProcess();
+    if (ImGui::Button("Scan RTTI")) SelectProcess();
 
     DrawClassList();
 
@@ -53,9 +53,9 @@ void MainWindow::DrawProcessList()
 
 	for (const auto& Process : ProcessList)
 	{
-		bool isSelected = (SelectedProcessName == Process.Name);
+		bool isSelected = (SelectedProcessName == Process.ProcessListName);
 
-		if (ImGui::Selectable(Process.Name.c_str(), isSelected))
+		if (ImGui::Selectable(Process.ProcessListName.c_str(), isSelected))
 		{
 			Target = std::make_shared<FTargetProcess>();
 			Target->Setup(Process.PID);
@@ -141,7 +141,7 @@ void MainWindow::DrawClassList()
 		FilteredClassesCache.clear();
 	}
 
-	if (ImGui::Button("Scan All Classes (Slow)"))
+	if (ImGui::Button("Scan For All References & Instances"))
 	{
 		for (auto& Class : RTTIObserver->GetClasses())
 		{

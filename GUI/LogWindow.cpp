@@ -58,7 +58,13 @@ void LogWindow::Log(const std::string& InLog)
 {
 	std::scoped_lock Lock(LogMutex);
 	LogHistory.push_back(InLog);
-	LogFile << InLog << std::endl;
+	LogFile << InLog << "\n";
+	if (FlushCounter > FlushCounterMax)
+	{
+		std::flush(LogFile);
+		FlushCounter = 0;
+	}
+	FlushCounter++;
 	WrapHistoryMax();
 }
 
@@ -66,7 +72,15 @@ void LogWindow::Log(const char* InLog)
 {
 	std::scoped_lock Lock(LogMutex);
 	LogHistory.push_back(InLog);
-	LogFile << InLog << std::endl;
+	
+	LogFile << InLog << "\n";
+	if (FlushCounter > FlushCounterMax)
+	{
+		std::flush(LogFile);
+		FlushCounter = 0;
+	}
+	FlushCounter++;
+	
 	WrapHistoryMax();
 }
 

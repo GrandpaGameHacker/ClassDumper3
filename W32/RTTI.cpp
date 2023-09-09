@@ -91,16 +91,6 @@ void RTTI::ProcessRTTIAsync()
 	ProcessThread.detach();
 }
 
-bool RTTI::IsAsyncProcessing()
-{
-	if (!bIsProcessing.load(std::memory_order_acquire))
-	{
-		return false;
-	}
-
-	return true;
-}
-
 std::string RTTI::GetLoadingStage()
 {
 	std::scoped_lock Lock(LoadingStageMutex);
@@ -302,16 +292,6 @@ void RTTI::ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CCla
 	bIsScanning.store(true, std::memory_order_release);
 	ScannerThread = std::thread(&RTTI::ScanForClassInstances, this, CClass);
 	ScannerThread.detach();
-}
-
-bool RTTI::IsAsyncScanning()
-{
-	if (!bIsScanning.load(std::memory_order_acquire))
-	{
-		return false;
-	}
-
-	return true;
 }
 
 

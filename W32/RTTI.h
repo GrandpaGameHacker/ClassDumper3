@@ -126,9 +126,22 @@ public:
 	
 	void ProcessRTTIAsync();
 
-	bool IsAsyncProcessing();
+	bool IsAsyncProcessing() const { return bIsProcessing.load(std::memory_order_acquire); }
 
 	std::string GetLoadingStage();
+	
+	
+	void ScanAllAsync();
+	void ScanForCodeReferencesAsync(const std::shared_ptr<ClassMetaData>& CClass);
+	void ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CClass);
+	inline bool IsAsyncScanning() const { return bIsScanning.load(std::memory_order_acquire); }
+	
+	
+
+protected:
+
+	void ScanAllMemory(std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances);
+	void ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstances, std::mutex& mtx);
 	
 	std::vector<uintptr_t> ScanMemory(const std::shared_ptr<ClassMetaData>& CClass,
 		std::vector<std::future<FMemoryBlock>>& Blocks,
@@ -137,21 +150,10 @@ public:
 	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CClass);
 	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<ClassMetaData>& CClass);
 	
+	void ScanAll();
 	void ScanForAllCodeReferences();
 	void ScanForAllClassInstances();
 
-	void ScanAllMemory(std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances);
-	void ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstances, std::mutex& mtx);
-	
-	void ScanAll();
-	void ScanAllAsync();
-	
-	void ScanForCodeReferencesAsync(const std::shared_ptr<ClassMetaData>& CClass);
-	void ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CClass);
-	bool IsAsyncScanning();
-	
-
-protected:
 	void FindValidSections();
 	bool IsInExecutableSection(uintptr_t Address);
 	bool IsInReadOnlySection(uintptr_t Address);

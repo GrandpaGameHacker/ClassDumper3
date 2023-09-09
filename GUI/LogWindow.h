@@ -23,5 +23,7 @@ protected:
 	size_t MaxLogHistory = 256;
 	std::mutex LogMutex;
 	std::ofstream LogFile;
+	size_t FlushCounter = 0;
+	size_t FlushCounterMax = 1024;
 };
 

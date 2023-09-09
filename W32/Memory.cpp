@@ -48,6 +48,7 @@ std::vector<FProcessListItem> GetProcessList()
 		FProcessListItem ProcessItem;
 		ProcessItem.PID = ProcessEntry.th32ProcessID;
 		ProcessItem.Name = ProcessEntry.szExeFile;
+		ProcessItem.ProcessListName = std::to_string(ProcessItem.PID) + " : " + ProcessItem.Name;
 
 		HANDLE ModuleSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, ProcessEntry.th32ProcessID);
 		if (ModuleSnapshotHandle != INVALID_HANDLE_VALUE)
@@ -100,6 +101,8 @@ std::vector<FProcessListItem> GetProcessList(const std::string& Filter)
 		FProcessListItem ProcessItem;
 		ProcessItem.PID = ProcessEntry.th32ProcessID;
 		ProcessItem.Name = ProcessEntry.szExeFile;
+		ProcessItem.ProcessListName = std::to_string(ProcessItem.PID) + " : " + ProcessItem.Name;
+		
 		if (ProcessItem.Name.find(Filter) != std::string::npos)
 		{
 			HANDLE ModuleSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, ProcessEntry.th32ProcessID);
@@ -195,7 +198,6 @@ FProcess::FProcess(DWORD InPID)
 	{
 		char szProcessName[MAX_PATH] = "<unknown>";
 		GetModuleBaseNameA(ProcessHandle, NULL, szProcessName, sizeof(szProcessName) / sizeof(char));
-
 		ProcessName = szProcessName;
 	}
 	else
@@ -206,18 +208,18 @@ FProcess::FProcess(DWORD InPID)
 
 }
 
-FProcess::FProcess(const std::string& ProcessName)
+FProcess::FProcess(const std::string& InProcessName)
 {
-	this->PID = GetProcessID(ProcessName);
+	PID = GetProcessID(InProcessName);
 	ProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, PID);
 	if (ProcessHandle == INVALID_HANDLE_VALUE)
 	{
-		ClassDumper3::LogF("Failed to open process %s", ProcessName.c_str());
+		ClassDumper3::LogF("Failed to open process %s", InProcessName.c_str());
 		return;
 	}
 	char szProcessName[MAX_PATH] = "<unknown>";
 	GetModuleBaseNameA(ProcessHandle, NULL, szProcessName, sizeof(szProcessName) / sizeof(char));
-	this->ProcessName = szProcessName;
+	ProcessName = szProcessName;
 }
 
 DWORD FProcess::GetProcessID(const std::string& ProcessName)

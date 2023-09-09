@@ -27,6 +27,7 @@ struct FProcessListItem
 {
 	DWORD PID;
 	std::string Name;
+	std::string ProcessListName;
 	std::string Path;
 };
 
@@ -48,7 +49,6 @@ struct FProcess
 	HANDLE ProcessHandle = INVALID_HANDLE_VALUE;
 	DWORD PID = 0;
 	std::string ProcessName = "<invalid>";
-
 	DEBUG_EVENT DebugEvent = { 0 };
 	bool bIsDebugActive = false;
 	CONTEXT DebugActiveContext = { 0 };

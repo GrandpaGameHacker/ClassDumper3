@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "../ClassDumper3.h"
 #include "imgui_stl.h"
 #include <iostream>
 #include "CustomWidgets.h"
@@ -62,11 +63,14 @@ void MainWindow::DrawProcessList()
 
 			if (!Target->IsValid())
 			{
+				ClassDumper3::LogF("Failed to attach to process %s", Process.ProcessListName.c_str());
 				Target.reset();
 				break;
 			}
 
-			SelectedProcessName = Process.Name;
+			ClassDumper3::LogF("Selected process %s", Process.ProcessListName.c_str());
+
+			SelectedProcessName = Process.ProcessListName;
 			SelectedModuleName = Target->ModuleMap.Modules[0].Name;
 		}
 	}

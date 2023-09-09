@@ -20,7 +20,7 @@ protected:
 	void WrapHistoryMax();
 	std::string GetCurrentDateTime();
 	std::vector<std::string> LogHistory;
-	size_t MaxLogHistory = 256;
+	size_t MaxLogHistory = 8192;
 	std::mutex LogMutex;
 	std::ofstream LogFile;
 	size_t FlushCounter = 0;

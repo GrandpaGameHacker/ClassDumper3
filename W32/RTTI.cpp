@@ -61,6 +61,21 @@ std::vector<std::shared_ptr<ClassMetaData>> RTTI::FindAll(const std::string& Cla
 	return Classes;
 }
 
+std::vector<std::shared_ptr<ClassMetaData>> RTTI::FindChildClasses(const std::shared_ptr<ClassMetaData>& CClass)
+{
+	std::vector<std::shared_ptr<ClassMetaData>> Classes;
+
+	for (auto& Entry : VTableClassMap)
+	{
+		if (Entry.second->IsChildOf(CClass))
+		{
+			Classes.push_back(Entry.second);
+		}
+	}
+
+	return Classes;
+}
+
 std::vector<std::shared_ptr<ClassMetaData>> RTTI::GetClasses()
 {
 	return Classes;
@@ -691,4 +706,17 @@ void RTTI::SetProcessingStage(std::string Stage)
 {
 	std::scoped_lock Lock(ProcessingStageMutex);
 	ProcessingStage = Stage;
+}
+
+bool ClassMetaData::IsChildOf(const std::shared_ptr<ClassMetaData>& CClass) const
+{
+	for (const std::shared_ptr<ParentClass>& Parent : Parents)
+	{
+		if (Parent->Name == CClass->Name)
+		{
+			return true;
+		}
+	}
+	
+	return false;
 }

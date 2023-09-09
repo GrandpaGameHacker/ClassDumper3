@@ -20,6 +20,7 @@ protected:
 	void RefreshProcessList();
 	void SelectProcess();
 	void FilterClasses(const std::string& filter);
+	void FilterChildren();
 	void DrawClassList();
 	void DrawClass(const std::shared_ptr<ClassMetaData>& cl);
 	
@@ -28,6 +29,7 @@ protected:
 	std::string ProcessFilter;
 	std::string ClassFilter;
 	std::vector<std::shared_ptr<ClassMetaData>> FilteredClassesCache;
+	std::vector<std::shared_ptr<ClassMetaData>> FilteredChildrenCache;
 	std::vector<FProcessListItem> ProcessList;
 	std::shared_ptr<FTargetProcess> Target;
 	std::shared_ptr<RTTI> RTTIObserver;

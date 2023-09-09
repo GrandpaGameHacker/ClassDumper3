@@ -83,6 +83,8 @@ struct ClassMetaData
 	bool bAmbigious = false;
 	bool bStruct = false;
 	bool bInterface = false;
+
+	bool IsChildOf(const std::shared_ptr<ClassMetaData>& CClass) const;
 };
 
 struct ParentClass
@@ -117,6 +119,7 @@ public:
 	std::shared_ptr<ClassMetaData> Find(uintptr_t VTable);
 	std::shared_ptr<ClassMetaData> FindFirst(const std::string& ClassName);
 	std::vector<std::shared_ptr<ClassMetaData>> FindAll(const std::string& ClassName);
+	std::vector<std::shared_ptr<ClassMetaData>> FindChildClasses(const std::shared_ptr<ClassMetaData>& CClass);
 	std::vector<std::shared_ptr<ClassMetaData>> GetClasses();
 
 	void ProcessRTTI();

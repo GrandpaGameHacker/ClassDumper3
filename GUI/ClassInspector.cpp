@@ -146,7 +146,6 @@ void ClassInspector::Draw()
 void ClassInspector::DrawClassReferences()
 {
 	if (!SelectedClass) return;
-
 	
 	ImGui::Text("Code References:");
 	ImGui::BeginChildFrame(2, {300,300});

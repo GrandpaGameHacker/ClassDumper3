@@ -120,6 +120,15 @@ void MainWindow::FilterClasses(const std::string& filter)
 	FilteredClassesCache = RTTIObserver->FindAll(filter);
 }
 
+void MainWindow::FilterChildren()
+{
+	auto SelectedClassLocked = SelectedClass.lock();
+	if (!SelectedClassLocked) return;
+	
+	FilteredChildrenCache = RTTIObserver->FindChildClasses(SelectedClassLocked);
+	ClassDumper3::LogF("Found %d children for %s", FilteredChildrenCache.size(), SelectedClassLocked->Name.c_str());
+}
+
 void MainWindow::DrawClassList()
 {
 	if (!RTTIObserver) return;
@@ -161,9 +170,33 @@ void MainWindow::DrawClassList()
 		ImGui::Spinner("Spinner", 10, 10, 0xFF0000FF);
 	}
 
+	
+	if (ImGui::Button("Filter Children"))
+	{
+		ClassFilter = "";
+		FilteredClassesCache.clear();
+		FilterChildren();
+	}
+	
+	ImGui::SameLine();
+	
+	if (ImGui::Button("Clear Child Filter"))
+	{
+		FilteredChildrenCache.clear();
+	}
+
 	ImGui::BeginChildFrame(1, ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight()));
 
-	const auto& ClassesToDraw = ClassFilter.empty() ? RTTIObserver->GetClasses() : FilteredClassesCache;
+	auto ClassesToDraw = RTTIObserver->GetClasses();
+	
+	if (!ClassFilter.empty() && !FilteredClassesCache.empty())
+	{
+		ClassesToDraw = FilteredClassesCache;
+	}
+	else if (!FilteredChildrenCache.empty())
+	{
+		ClassesToDraw = FilteredChildrenCache;
+	}
 
 	if (ClassesToDraw.empty())
 	{

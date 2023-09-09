@@ -139,6 +139,7 @@ bool Is32BitExecutable(const std::string& FilePath, bool& bFailed)
 	HANDLE FileMappingHandle = CreateFileMapping(FileHandle, NULL, PAGE_READONLY, 0, 0, NULL);
 	if (!FileMappingHandle)
 	{
+		ClassDumper3::LogF("Failed to create file mapping for %s - last error %u", FilePath.c_str(), GetLastError());
 		CloseHandle(FileHandle);
 		bFailed = true;
 		return false;
@@ -147,6 +148,7 @@ bool Is32BitExecutable(const std::string& FilePath, bool& bFailed)
 	LPVOID pFileBase = MapViewOfFile(FileMappingHandle, FILE_MAP_READ, 0, 0, 0);
 	if (!pFileBase)
 	{
+		ClassDumper3::LogF("Failed to map view of file %s - last error %u", FilePath.c_str(), GetLastError());
 		bFailed = true;
 		CloseHandle(FileMappingHandle);
 		CloseHandle(FileHandle);
@@ -156,6 +158,7 @@ bool Is32BitExecutable(const std::string& FilePath, bool& bFailed)
 	IMAGE_DOS_HEADER* pDosHeader = static_cast<IMAGE_DOS_HEADER*>(pFileBase);
 	if (pDosHeader->e_magic != IMAGE_DOS_SIGNATURE)
 	{
+		ClassDumper3::LogF("Invalid DOS header for %s", FilePath.c_str());
 		bFailed = true;
 		UnmapViewOfFile(pFileBase);
 		CloseHandle(FileMappingHandle);
@@ -197,7 +200,7 @@ FProcess::FProcess(DWORD InPID)
 	}
 	else
 	{
-		ClassDumper3::Log("Failed to open process");
+		ClassDumper3::LogF("Failed to open process - error code: %u", GetLastError());
 		return;
 	}
 
@@ -209,7 +212,7 @@ FProcess::FProcess(const std::string& ProcessName)
 	ProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, PID);
 	if (ProcessHandle == INVALID_HANDLE_VALUE)
 	{
-		ClassDumper3::Log("Failed to open process");
+		ClassDumper3::LogF("Failed to open process %s", ProcessName.c_str());
 		return;
 	}
 	char szProcessName[MAX_PATH] = "<unknown>";
@@ -225,13 +228,13 @@ DWORD FProcess::GetProcessID(const std::string& ProcessName)
 	HANDLE ProcessSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 	if (ProcessSnapshotHandle == INVALID_HANDLE_VALUE)
 	{
-		ClassDumper3::Log("Failed to create snapshot");
+		ClassDumper3::LogF("Failed to create process snapshot - error code: %u", GetLastError());
 
 		return 0;
 	}
 	if (!Process32First(ProcessSnapshotHandle, &ProcessEntry))
 	{
-		ClassDumper3::Log("Failed to get first process");
+		ClassDumper3::LogF("Failed to get first process in snapshot - error code: %u", GetLastError());
 		CloseHandle(ProcessSnapshotHandle);
 		return 0;
 	}
@@ -505,7 +508,7 @@ FMemoryRange* FTargetProcess::GetMemoryRange(const uintptr_t Address)
 	return nullptr;
 }
 
-std::vector<FMemoryBlock> FTargetProcess::GetReadableMemory()
+std::vector<FMemoryBlock> FTargetProcess::GetReadableMemoryBlocking()
 {
 	std::vector<std::future<FMemoryBlock>> Futures;
 	std::vector<FMemoryBlock> Blocks;
@@ -639,7 +642,7 @@ std::vector<HWND> FTargetProcess::GetWindows()
 
 std::string FTargetProcess::GetWindowName(HWND Window)
 {
-	char buffer[256];
+	char buffer[256] = { 0 };
 	GetWindowTextA(Window, buffer, 256);
 	return std::string(buffer);
 }

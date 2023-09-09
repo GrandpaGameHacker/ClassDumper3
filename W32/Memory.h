@@ -228,7 +228,7 @@ struct FTargetProcess
 	FModule* GetModule(const std::string& moduleName);
 	inline std::vector<FModule>& GetModules() { return ModuleMap.Modules; };
 	FMemoryRange* GetMemoryRange(const uintptr_t Address);
-	std::vector<FMemoryBlock> GetReadableMemory();
+	std::vector<FMemoryBlock> GetReadableMemoryBlocking();
 	std::vector<std::future<FMemoryBlock>> AsyncGetReadableMemory();
 	std::vector<std::future<FMemoryBlock>> AsyncGetExecutableMemory();
 	FModuleSection* GetModuleSection(uintptr_t address);

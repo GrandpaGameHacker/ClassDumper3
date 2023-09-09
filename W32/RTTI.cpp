@@ -263,7 +263,6 @@ void RTTI::ScanForAllClassInstances()
 	ScanAllMemory(Blocks, true);
 }
 
-
 void RTTI::ScanAll()
 {
 	for (std::shared_ptr<ClassMetaData>& Class : Classes)

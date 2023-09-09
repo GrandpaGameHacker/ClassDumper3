@@ -116,5 +116,8 @@
     <ClInclude Include="GUI\CustomWidgets.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Util\ThreadPool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

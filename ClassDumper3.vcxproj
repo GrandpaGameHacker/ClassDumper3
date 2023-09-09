@@ -168,6 +168,7 @@
     <ClInclude Include="GUI\MainWindow.h" />
     <ClInclude Include="GUI\LogWindow.h" />
     <ClInclude Include="RenderConfig.h" />
+    <ClInclude Include="Util\ThreadPool.h" />
     <ClInclude Include="Util\Strings.h" />
     <ClInclude Include="w32\Disassembler.h" />
     <ClInclude Include="w32\Memory.h" />

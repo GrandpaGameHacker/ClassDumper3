@@ -1,6 +1,7 @@
 #include "RTTI.h"
 #include "../Util/Strings.h"
 #include "../ClassDumper3.h"
+#include "../Util/ThreadPool.h"
 
 RTTI::RTTI(FTargetProcess* InProcess, std::string InModuleName)
 {

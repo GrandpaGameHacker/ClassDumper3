@@ -40,7 +40,7 @@ bool Is32BitExecutable(const std::string& FilePath, bool& bFailed);
 bool Is32BitProcess(DWORD PID);
 
 bool IsSameBitsProcess(const std::string& FilePath);
-inline bool IsRunning64Bits() {return sizeof(void*) == 8;};
+inline bool IsRunning64Bits() {return sizeof(void*) == 8;} ;
 
 
 struct FProcess

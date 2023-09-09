@@ -107,49 +107,47 @@ std::string RTTI::GetLoadingStage()
 	return LoadingStageCache;
 }
 
-std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CClass)
+std::vector<uintptr_t> RTTI::ScanMemory(const std::shared_ptr<ClassMetaData>& CClass,
+	std::vector<std::future<FMemoryBlock>>& Blocks,
+	bool bInstanceScan)
 {
-	if (!CClass) return std::vector<uintptr_t>();
-
-	bool bUse64BitScanner = IsRunning64Bits();
-	
-	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetExecutableMemory();
 	std::vector<FMemoryBlock> BlocksToFree;
-	std::vector<uintptr_t> References;
-	
+	std::vector<uintptr_t> Results;
+
 	for (auto& Block : Blocks)
 	{
 		Block.wait();
 		FMemoryBlock MemoryBlock = Block.get();
 		if (MemoryBlock.Size == 0) continue;
 		if (!MemoryBlock.Copy) continue;
-		
+
 		BlocksToFree.push_back(MemoryBlock);
-		
+
 		uintptr_t MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy);
 		uintptr_t MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
-	
 
-		for (uintptr_t i = MemoryBlockCopy; i < MemoryBlockCopy + MemoryBlock.Size; i++)
+		for (uintptr_t i = MemoryBlockCopy; i < MemoryBlockCopy + MemoryBlock.Size; i += (bInstanceScan ? 4 : 1))
 		{
 			uintptr_t Candidate = 0;
 			uintptr_t RealAddress = i - MemoryBlockCopy + MemoryBlockAddress;
-			
-			if(bUse64BitScanner)
+
+			if (bUse64BitScanner && !bInstanceScan)
 			{
 				Candidate = *(DWORD*)i;
-				Candidate += RealAddress + 4;	
+				Candidate += RealAddress + 4;
 			}
 			else
 			{
 				Candidate = *(uintptr_t*)i;
 			}
-			
+
+			if (Candidate % sizeof(void*) != 0) continue; // Skip unaligned addresses
+
 			if (Candidate == CClass->VTable)
 			{
-				// log reference
-				ClassDumper3::LogF("Found reference to %s at 0x%p", CClass->Name.c_str(), RealAddress);
-				References.push_back(RealAddress);
+				const char* logMessage = bInstanceScan ? "Found %s Instance at 0x%p" : "Found reference to %s at 0x%p";
+				ClassDumper3::LogF(logMessage, CClass->Name.c_str(), RealAddress);
+				Results.push_back(RealAddress);
 			}
 		}
 	}
@@ -158,7 +156,15 @@ std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<ClassMe
 	{
 		Block.FreeBlock();
 	}
-	
+
+	return Results;
+}
+
+std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CClass)
+{
+	if (!CClass) return std::vector<uintptr_t>();
+	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetExecutableMemory();
+	std::vector<uintptr_t> References = ScanMemory(CClass, Blocks, false);
 	CClass->CodeReferences = References;
 	bIsScanning.store(false, std::memory_order_release);
 	return References;
@@ -167,122 +173,62 @@ std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<ClassMe
 std::vector<uintptr_t> RTTI::ScanForClassInstances(const std::shared_ptr<ClassMetaData>& CClass)
 {
 	if (!CClass) return std::vector<uintptr_t>();
-
 	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetReadableMemory();
-	std::vector<FMemoryBlock> BlocksToFree;
-	std::vector<uintptr_t> Instances;
-
-	for (auto& Block : Blocks)
-	{
-		Block.wait();
-		FMemoryBlock MemoryBlock = Block.get();
-		if (MemoryBlock.Size == 0) continue;
-		if (!MemoryBlock.Copy) continue;
-
-		BlocksToFree.push_back(MemoryBlock);
-
-		uintptr_t MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy);
-		uintptr_t MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
-
-		for (uintptr_t i = MemoryBlockCopy; i < MemoryBlockCopy + MemoryBlock.Size; i+=4)
-		{
-			uintptr_t RealAddress = i - MemoryBlockCopy + MemoryBlockAddress;
-			uintptr_t Candidate = *(uintptr_t*)i;
-			if (Candidate == CClass->VTable)
-			{
-				// log reference
-				ClassDumper3::LogF("Found %s Instance at 0x%p", CClass->Name.c_str(), RealAddress);
-				Instances.push_back(RealAddress);
-			}
-		}
-	}
-
-	for (FMemoryBlock& Block : BlocksToFree)
-	{
-		Block.FreeBlock();
-	}
-
+	std::vector<uintptr_t> Instances = ScanMemory(CClass, Blocks, true);
 	CClass->ClassInstances = Instances;
 	bIsScanning.store(false, std::memory_order_release);
 	return Instances;
 }
 
-void RTTI::ScanForAllCodeReferences()
+void RTTI::ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstances, std::mutex& mtx)
 {
-	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetExecutableMemory();
-	std::vector<FMemoryBlock> BlocksToFree;
-	std::mutex mtx;
+	uintptr_t MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy);
+	uintptr_t MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
 
-	bool bUse64BitScanner = IsRunning64Bits();
-
+	for (uintptr_t i = MemoryBlockCopy; i < MemoryBlockCopy + MemoryBlock.Size; i += (isForInstances ? 4 : 1))
 	{
-		ThreadPool pool(std::thread::hardware_concurrency());
+		uintptr_t Candidate = 0;
+		uintptr_t RealAddress = i - MemoryBlockCopy + MemoryBlockAddress;
 
+		if (bUse64BitScanner && !isForInstances)
+		{
+			Candidate = *(DWORD*)i;
+			Candidate += RealAddress + 4;
+		}
+		else
+		{
+			Candidate = *(uintptr_t*)i;
+		}
+
+		if (Candidate % sizeof(void*) != 0) continue; // Skip unaligned addresses
+
+		auto it = VTableClassMap.find(Candidate);
+		if (it != VTableClassMap.end())
+		{
+			const char* logMessage = isForInstances ? "Found %s instance at 0x%p" : "Found reference to %s at 0x%p";
+			ClassDumper3::LogF(logMessage, it->second->Name.c_str(), RealAddress);
+
+			std::scoped_lock Lock(mtx);
+			if (isForInstances)
+				it->second->ClassInstances.push_back(RealAddress);
+			else
+				it->second->CodeReferences.push_back(RealAddress);
+		}
+	}
+}
+
+void RTTI::ScanAllMemory(std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances)
+{
+	std::vector<FMemoryBlock> BlocksToFree;
+	{
+		std::mutex mtx;
+
+		ThreadPool pool(std::thread::hardware_concurrency());
 
 		for (auto& Block : Blocks)
 		{
 			pool.enqueue([&]() mutable
 			{
-				Block.wait();
-				FMemoryBlock MemoryBlock = Block.get();
-				if (MemoryBlock.Size == 0) return;
-				if (!MemoryBlock.Copy) return;
-
-				{
-					std::scoped_lock Lock(mtx);
-					BlocksToFree.push_back(MemoryBlock);
-				}
-
-				uintptr_t MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy);
-				uintptr_t MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
-
-				for (uintptr_t i = MemoryBlockCopy; i < MemoryBlockCopy + MemoryBlock.Size; i++)
-				{
-					uintptr_t Candidate = 0;
-					uintptr_t RealAddress = i - MemoryBlockCopy + MemoryBlockAddress;
-
-					if (bUse64BitScanner)
-					{
-						Candidate = *(DWORD*)i;
-						Candidate += RealAddress + 4;
-					}
-					else
-					{
-						Candidate = *(uintptr_t*)i;
-					}
-
-					auto it = VTableClassMap.find(Candidate);
-					if (it != VTableClassMap.end())
-					{
-						// log reference
-						ClassDumper3::LogF("Found reference to %s at 0x%p", it->second->Name.c_str(), RealAddress);
-						std::scoped_lock Lock(mtx);
-						it->second->CodeReferences.push_back(RealAddress);
-					}
-				}
-			});
-		}
-	}
-
-	for (FMemoryBlock& Block : BlocksToFree)
-	{
-		Block.FreeBlock();
-	}
-}
-
-void RTTI::ScanForAllClassInstances()
-{
-	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetReadableMemory();
-	std::vector<FMemoryBlock> BlocksToFree;
-	std::mutex mtx;
-
-	{
-		ThreadPool pool(std::thread::hardware_concurrency());
-
-		for (auto& Block : Blocks)
-		{
-			pool.enqueue([&]() mutable
-				{
 					Block.wait();
 					FMemoryBlock MemoryBlock = Block.get();
 					if (MemoryBlock.Size == 0) return;
@@ -293,23 +239,8 @@ void RTTI::ScanForAllClassInstances()
 						BlocksToFree.push_back(MemoryBlock);
 					}
 
-					uintptr_t MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy);
-					uintptr_t MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
-
-					for (uintptr_t i = MemoryBlockCopy; i < MemoryBlockCopy + MemoryBlock.Size; i += 4)
-					{
-						uintptr_t RealAddress = i - MemoryBlockCopy + MemoryBlockAddress;
-						uintptr_t Candidate = *(uintptr_t*)i;
-						auto it = VTableClassMap.find(Candidate);
-						if (it != VTableClassMap.end())
-						{
-							// log reference
-							ClassDumper3::LogF("Found %s instance at 0x%p", it->second->Name.c_str(), RealAddress);
-							std::scoped_lock Lock(mtx);
-							it->second->CodeReferences.push_back(RealAddress);
-						}
-					}
-				});
+					ProcessMemoryBlock(MemoryBlock, isForInstances, mtx);
+			});
 		}
 	}
 
@@ -318,6 +249,19 @@ void RTTI::ScanForAllClassInstances()
 		Block.FreeBlock();
 	}
 }
+
+void RTTI::ScanForAllCodeReferences()
+{
+	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetExecutableMemory();
+	ScanAllMemory(Blocks, false);
+}
+
+void RTTI::ScanForAllClassInstances()
+{
+	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetReadableMemory();
+	ScanAllMemory(Blocks, true);
+}
+
 
 void RTTI::ScanAll()
 {
@@ -329,6 +273,7 @@ void RTTI::ScanAll()
 	
 	ScanForAllCodeReferences();
 	ScanForAllClassInstances();
+	
 	bIsScanning.store(false, std::memory_order_release);
 }
 

@@ -149,6 +149,14 @@ void MainWindow::DrawClassList()
 		}
 	}
 
+	if (RTTIObserver->IsAsyncScanning())
+	{
+		ImGui::SameLine();
+		ImGui::Text("Scan in progress...");
+		ImGui::SameLine();
+		ImGui::Spinner("Spinner", 10, 10, 0xFF0000FF);
+	}
+
 	ImGui::BeginChildFrame(1, ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight()));
 
 	const auto& ClassesToDraw = ClassFilter.empty() ? RTTIObserver->GetClasses() : FilteredClassesCache;

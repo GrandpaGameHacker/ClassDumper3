@@ -177,12 +177,19 @@ public:
 	bool IsAsyncProcessing();
 
 	std::string GetLoadingStage();
+	
+	std::vector<uintptr_t> ScanMemory(const std::shared_ptr<ClassMetaData>& CClass,
+		std::vector<std::future<FMemoryBlock>>& Blocks,
+		bool isForInstances);
 
 	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CClass);
 	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<ClassMetaData>& CClass);
 	
 	void ScanForAllCodeReferences();
 	void ScanForAllClassInstances();
+
+	void ScanAllMemory(std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances);
+	void ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstances, std::mutex& mtx);
 	
 	void ScanAll();
 	void ScanAllAsync();
@@ -221,6 +228,7 @@ protected:
 	std::atomic_bool bIsScanning = false;
 	std::thread ScannerThread;
 
+	bool bUse64BitScanner = sizeof(void*) == 8;
 	
 	FModule* Module;
 	std::string ModuleName;

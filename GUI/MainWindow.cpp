@@ -127,7 +127,7 @@ void MainWindow::DrawClassList()
 	if (RTTIObserver->IsAsyncProcessing())
 	{
 		ImGui::Text("Processing...");
-		ImGui::Text("%s", RTTIObserver->GetLoadingStage().c_str());
+		ImGui::Text("%s", RTTIObserver->GetProcessingStage().c_str());
 		ImGui::Spinner("Spinner", 10, 10, 0xFF0000FF);
 		return;
 	}

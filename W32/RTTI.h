@@ -128,36 +128,21 @@ public:
 
 	bool IsAsyncProcessing() const { return bIsProcessing.load(std::memory_order_acquire); }
 
-	std::string GetLoadingStage();
+	std::string GetProcessingStage();
 	
 	
 	void ScanAllAsync();
 	void ScanForCodeReferencesAsync(const std::shared_ptr<ClassMetaData>& CClass);
 	void ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CClass);
 	inline bool IsAsyncScanning() const { return bIsScanning.load(std::memory_order_acquire); }
-	
-	
 
 protected:
-
-	void ScanAllMemory(std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances);
-	void ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstances, std::mutex& mtx);
-	
-	std::vector<uintptr_t> ScanMemory(const std::shared_ptr<ClassMetaData>& CClass,
-		std::vector<std::future<FMemoryBlock>>& Blocks,
-		bool isForInstances);
-
-	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CClass);
-	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<ClassMetaData>& CClass);
-	
-	void ScanAll();
-	void ScanForAllCodeReferences();
-	void ScanForAllClassInstances();
-
 	void FindValidSections();
 	bool IsInExecutableSection(uintptr_t Address);
 	bool IsInReadOnlySection(uintptr_t Address);
-	
+
+	void SetProcessingStage(std::string Stage);
+
 	void ScanForClasses(std::vector<PotentialClass>& PotentialClasses);
 	void ValidateClasses(std::vector<PotentialClass>& PotentialClasses);
 	void ProcessClasses(std::vector<PotentialClass>& FinalClasses);
@@ -169,28 +154,55 @@ protected:
 	std::string DemangleMSVC(char* Symbol);
 	void SortClasses(std::vector<PotentialClass>& Classes);
 	void FilterSymbol(std::string& Symbol);
+	
+	void ScanAllMemory(std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances);
+	void ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstances, std::mutex& mtx);
+	
+	std::vector<uintptr_t> ScanMemory(
+		const std::shared_ptr<ClassMetaData>& CClass,
+		std::vector<std::future<FMemoryBlock>>& Blocks,
+		bool isForInstances);
 
-	void SetLoadingStage(std::string Stage);
-
+	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CClass);
+	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<ClassMetaData>& CClass);
+	
+	void ScanAll();
+	void ScanForAllCodeReferences();
+	void ScanForAllClassInstances();
+	
+	/************************************************************************/
+	/*	RTTI Scanning */
+	/************************************************************************/
 	std::atomic_bool bIsProcessing = false;
 	std::thread ProcessThread;
 	constexpr static size_t LoadingStageSize = 128;
-	std::mutex LoadingStageMutex;
-	std::string LoadingStage = "Not Loading Anything...";
-	std::string LoadingStageCache;
+	std::mutex ProcessingStageMutex;
+	std::string ProcessingStage = "Not Loading Anything...";
+	std::string ProcessingStageCache;
+	
+	/************************************************************************/
+	/*	CodeRef / Instance Scanning */
+	/************************************************************************/
 
 	std::atomic_bool bIsScanning = false;
 	std::thread ScannerThread;
-
 	bool bUse64BitScanner = sizeof(void*) == 8;
+
+	/************************************************************************/
+	/*	Process and Module Info
+	/************************************************************************/
+	
+	FTargetProcess* Process;
 	
 	FModule* Module;
 	std::string ModuleName;
 	uintptr_t ModuleBase;
-	FTargetProcess* Process;
-
 	std::vector<FModuleSection> ExecutableSections;
 	std::vector<FModuleSection> ReadOnlySections;
+	
+	/************************************************************************/
+	/*	Class Meta Data (Processed from RTTI and Memory Scans)
+	/************************************************************************/
 	
 	std::vector<std::shared_ptr<ClassMetaData>> Classes;
 	std::unordered_map<uintptr_t, std::shared_ptr<ClassMetaData>> VTableClassMap;

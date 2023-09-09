@@ -91,11 +91,11 @@ void RTTI::ProcessRTTIAsync()
 	ProcessThread.detach();
 }
 
-std::string RTTI::GetLoadingStage()
+std::string RTTI::GetProcessingStage()
 {
-	std::scoped_lock Lock(LoadingStageMutex);
-	std::string LoadingStageCache = LoadingStage;
-	return LoadingStageCache;
+	std::scoped_lock Lock(ProcessingStageMutex);
+	std::string ProcessingStageCache = ProcessingStage;
+	return ProcessingStageCache;
 }
 
 std::vector<uintptr_t> RTTI::ScanMemory(const std::shared_ptr<ClassMetaData>& CClass,
@@ -297,7 +297,7 @@ void RTTI::ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CCla
 
 void RTTI::FindValidSections()
 {
-	SetLoadingStage("Finding valid PE sections");
+	SetProcessingStage("Finding valid PE sections");
 	bool bFoundExecutable = false;
 	bool bFoundReadOnly = false;
 	
@@ -320,7 +320,7 @@ void RTTI::FindValidSections()
 	if (!bFoundExecutable || !bFoundReadOnly)
 	{
 		ClassDumper3::Log("Failed to find valid sections for RTTI scan");
-		SetLoadingStage("Error: Failed to find valid sections for RTTI scan");
+		SetProcessingStage("Error: Failed to find valid sections for RTTI scan");
 	}
 }
 
@@ -350,7 +350,7 @@ bool RTTI::IsInReadOnlySection(uintptr_t Address)
 
 void RTTI::ScanForClasses(std::vector<PotentialClass>& PotentialClasses)
 {
-	SetLoadingStage("Scanning for potential classes...");
+	SetProcessingStage("Scanning for potential classes...");
 	uintptr_t* SectionBuffer;
 	size_t TotalSectionSize = 0;
 
@@ -403,7 +403,7 @@ void RTTI::ScanForClasses(std::vector<PotentialClass>& PotentialClasses)
 
 void RTTI::ValidateClasses(std::vector<PotentialClass>& PotentialClasses)
 {
-	SetLoadingStage("Validating potential classes...");
+	SetProcessingStage("Validating potential classes...");
 	
 	std::vector<PotentialClass> ValidatedClasses;
 	ValidatedClasses.reserve(PotentialClasses.size());
@@ -452,7 +452,7 @@ void RTTI::ValidateClasses(std::vector<PotentialClass>& PotentialClasses)
 
 void RTTI::ProcessClasses(std::vector<PotentialClass>& FinalClasses)
 {
-	SetLoadingStage("Processing class data...");
+	SetProcessingStage("Processing class data...");
 
 	std::string LastClassName = "";
 	std::shared_ptr<ClassMetaData> LastClass = nullptr;
@@ -525,7 +525,7 @@ void RTTI::ProcessClasses(std::vector<PotentialClass>& FinalClasses)
 void RTTI::ProcessParentClasses()
 {
 	// process parent classes
-	SetLoadingStage("Processing parent class data...");
+	SetProcessingStage("Processing parent class data...");
 
 	int interfaceCount = 0;
 
@@ -664,7 +664,7 @@ std::string RTTI::DemangleMSVC(char* Symbol)
 
 void RTTI::SortClasses(std::vector<PotentialClass>& Classes)
 {
-	SetLoadingStage("Sorting classes...");
+	SetProcessingStage("Sorting classes...");
 	std::sort(Classes.begin(), Classes.end(), [=](PotentialClass a, PotentialClass b){ return a.DemangledName < b.DemangledName; });
 }
 
@@ -687,8 +687,8 @@ void RTTI::FilterSymbol(std::string& Symbol)
 	}
 }
 
-void RTTI::SetLoadingStage(std::string Stage)
+void RTTI::SetProcessingStage(std::string Stage)
 {
-	std::scoped_lock Lock(LoadingStageMutex);
-	LoadingStage = Stage;
+	std::scoped_lock Lock(ProcessingStageMutex);
+	ProcessingStage = Stage;
 }

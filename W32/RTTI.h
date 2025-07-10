@@ -1,6 +1,37 @@
 #pragma once
 #include "Memory.h"
 #include <atomic>
+#include <typeinfo>
+
+enum class VTABLE_ABI
+{
+	MSVC,
+	ITANIUM
+};
+
+// Planned Abstraction From MSVC OR Itanium
+class RTTIBase
+{
+
+};
+
+// initial Itanium ABI implementation
+//namespace Itanium
+//{
+//	class __class_type_info : public std::type_info
+//	{
+//	public:
+//		explicit __class_type_info(const char* name) {};
+//		virtual ~__class_type_info() {};
+//	};
+//
+//	struct __si_class_type_info
+//	{
+//		__class_type_info base;
+//		const __class_type_info* baseType; 
+//	};
+//}
+
 
 struct PMD
 {
@@ -84,7 +115,7 @@ struct ClassMetaData
 	bool bStruct = false;
 	bool bInterface = false;
 
-	bool IsChildOf(const std::shared_ptr<ClassMetaData>& CClass) const;
+	bool IsChildOf(const std::shared_ptr<ClassMetaData>& CMeta) const;
 };
 
 struct ParentClass
@@ -109,17 +140,17 @@ struct ParentClass
 /************************************************************************/
 /* RTTI Scanner class to get RTTI info from a process                   */
 /* Results are in a queryable API									    */
-/* Only supports MSVC virtual inheritance / symbol demangling			*/
+/* For now Only supports MSVC virtual inheritance / symbol demangling	*/
 /************************************************************************/
 
 class RTTI
 {
 public:
-	RTTI(FTargetProcess* InProcess, std::string InModuleName);
+	RTTI(FTargetProcess* InProcess, const std::string& InModuleName);
 	std::shared_ptr<ClassMetaData> Find(uintptr_t VTable);
 	std::shared_ptr<ClassMetaData> FindFirst(const std::string& ClassName);
 	std::vector<std::shared_ptr<ClassMetaData>> FindAll(const std::string& ClassName);
-	std::vector<std::shared_ptr<ClassMetaData>> FindChildClasses(const std::shared_ptr<ClassMetaData>& CClass);
+	std::vector<std::shared_ptr<ClassMetaData>> FindChildClasses(const std::shared_ptr<ClassMetaData>& CMeta);
 	std::vector<std::shared_ptr<ClassMetaData>> GetClasses();
 
 	void ProcessRTTI();
@@ -128,12 +159,12 @@ public:
 
 	bool IsAsyncProcessing() const { return bIsProcessing.load(std::memory_order_acquire); }
 
-	std::string GetProcessingStage();
+	const std::string& GetProcessingStage();
 	
 	
 	void ScanAllAsync();
-	void ScanForCodeReferencesAsync(const std::shared_ptr<ClassMetaData>& CClass);
-	void ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CClass);
+	void ScanForCodeReferencesAsync(const std::shared_ptr<ClassMetaData>& CMeta);
+	void ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CMeta);
 	inline bool IsAsyncScanning() const { return bIsScanning.load(std::memory_order_acquire); }
 
 protected:
@@ -141,15 +172,15 @@ protected:
 	bool IsInExecutableSection(uintptr_t Address);
 	bool IsInReadOnlySection(uintptr_t Address);
 
-	void SetProcessingStage(std::string Stage);
+	void SetProcessingStage(const std::string& Stage);
 
 	void ScanForClasses(std::vector<PotentialClass>& PotentialClasses);
 	void ValidateClasses(std::vector<PotentialClass>& PotentialClasses);
-	void ProcessClasses(std::vector<PotentialClass>& FinalClasses);
+	void ProcessClasses(const std::vector<PotentialClass>& FinalClasses);
 	void ProcessParentClasses();
 
 	// todo: name functions based on what class they are from...
-	void EnumerateVirtualFunctions(std::shared_ptr<ClassMetaData>& c);
+	void EnumerateVirtualFunctions(const std::shared_ptr<ClassMetaData>& CMeta);
 
 	std::string DemangleMSVC(char* Symbol);
 	void SortClasses(std::vector<PotentialClass>& Classes);
@@ -158,13 +189,10 @@ protected:
 	void ScanAllMemory(std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances);
 	void ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstances, std::mutex& mtx);
 	
-	std::vector<uintptr_t> ScanMemory(
-		const std::shared_ptr<ClassMetaData>& CClass,
-		std::vector<std::future<FMemoryBlock>>& Blocks,
-		bool isForInstances);
+	std::vector<uintptr_t> ScanMemory(const std::shared_ptr<ClassMetaData>& CMeta, std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances);
 
-	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CClass);
-	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<ClassMetaData>& CClass);
+	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CMeta);
+	std::vector<uintptr_t> ScanForClassInstances(const std::shared_ptr<ClassMetaData>& CMeta);
 	
 	void ScanAll();
 	void ScanForAllCodeReferences();
@@ -175,7 +203,6 @@ protected:
 	/************************************************************************/
 	std::atomic_bool bIsProcessing = false;
 	std::thread ProcessThread;
-	constexpr static size_t LoadingStageSize = 128;
 	std::mutex ProcessingStageMutex;
 	std::string ProcessingStage = "Not Loading Anything...";
 	std::string ProcessingStageCache;

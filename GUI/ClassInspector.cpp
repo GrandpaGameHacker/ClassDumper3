@@ -151,7 +151,7 @@ void ClassInspector::DrawClassReferences()
 	ImGui::BeginChildFrame(2, {300,300});
 	if (!RTTIObserver->IsAsyncScanning())
 	{
-		for (auto& CodeReference : SelectedClass->CodeReferences)
+		for (const auto& CodeReference : SelectedClass->CodeReferences)
 		{
 			std::string CodeRefString = "0x" + IntegerToHexStr(CodeReference);
 
@@ -172,7 +172,7 @@ void ClassInspector::DrawClassReferences()
 	ImGui::BeginChildFrame(3, { 300,300 }, ImGuiWindowFlags_NoCollapse);
 	if (!RTTIObserver->IsAsyncScanning())
 	{
-		for (auto& Instance : SelectedClass->ClassInstances)
+		for (const auto& Instance : SelectedClass->ClassInstances)
 		{
 			std::string InstanceStr = "0x" + IntegerToHexStr(Instance);
 
@@ -227,7 +227,7 @@ void ClassInspector::CopyInfo()
 	Info += "Virtual Function Table: 0x" + IntegerToHexStr(SelectedClass->VTable) + "\n";
 	Info += "Num Virtual Functions: " + std::to_string(SelectedClass->Functions.size()) + "\n";
 
-    for (auto& FunctionName : SelectedClass->FunctionNames)
+    for (const auto& FunctionName : SelectedClass->FunctionNames)
     {
 		Info += IntegerToHexStr(FunctionName.first) + " : " + FunctionName.second + "\n";
     }

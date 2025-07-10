@@ -2,8 +2,10 @@
 #include "../Util/Strings.h"
 #include "../ClassDumper3.h"
 #include "../Util/ThreadPool.h"
+#include <numeric>
+#include <DbgHelp.h>
 
-RTTI::RTTI(FTargetProcess* InProcess, std::string InModuleName)
+RTTI::RTTI(FTargetProcess* InProcess, const std::string& InModuleName)
 {
 	Process = InProcess;
 	Module = Process->ModuleMap.GetModule(InModuleName);
@@ -43,7 +45,7 @@ std::shared_ptr<ClassMetaData> RTTI::FindFirst(const std::string& ClassName)
 
 std::vector<std::shared_ptr<ClassMetaData>> RTTI::FindAll(const std::string& ClassName)
 {
-	std::vector<std::shared_ptr<ClassMetaData>> Classes;
+	std::vector<std::shared_ptr<ClassMetaData>> FoundClasses;
 	std::string LowerClassName = ClassName;
 	std::transform(LowerClassName.begin(), LowerClassName.end(), LowerClassName.begin(), ::tolower);
 
@@ -54,26 +56,26 @@ std::vector<std::shared_ptr<ClassMetaData>> RTTI::FindAll(const std::string& Cla
 
 		if (LowerEntryFirst.find(LowerClassName) != std::string::npos)
 		{
-			Classes.push_back(Entry.second);
+			FoundClasses.push_back(Entry.second);
 		}
 	}
 
-	return Classes;
+	return FoundClasses;
 }
 
-std::vector<std::shared_ptr<ClassMetaData>> RTTI::FindChildClasses(const std::shared_ptr<ClassMetaData>& CClass)
+std::vector<std::shared_ptr<ClassMetaData>> RTTI::FindChildClasses(const std::shared_ptr<ClassMetaData>& CMeta)
 {
-	std::vector<std::shared_ptr<ClassMetaData>> Classes;
+	std::vector<std::shared_ptr<ClassMetaData>> FoundClasses;
 
 	for (auto& Entry : VTableClassMap)
 	{
-		if (Entry.second->IsChildOf(CClass))
+		if (Entry.second->IsChildOf(CMeta))
 		{
-			Classes.push_back(Entry.second);
+			FoundClasses.push_back(Entry.second);
 		}
 	}
 
-	return Classes;
+	return FoundClasses;
 }
 
 std::vector<std::shared_ptr<ClassMetaData>> RTTI::GetClasses()
@@ -86,10 +88,9 @@ void RTTI::ProcessRTTI()
 	FindValidSections();
 	
 	std::vector<PotentialClass> PotentialClasses;
-	
 	ScanForClasses(PotentialClasses);
 
-	if (PotentialClasses.size() > 0)
+	if (!PotentialClasses.empty())
 	{
 		ValidateClasses(PotentialClasses);
 	}
@@ -99,38 +100,35 @@ void RTTI::ProcessRTTI()
 
 void RTTI::ProcessRTTIAsync()
 {
-	if (bIsProcessing.load(std::memory_order_acquire)) return;
+	if (bIsProcessing.load(std::memory_order_acquire))
+	{
+		return;
+	}
 	
 	bIsProcessing.store(true, std::memory_order_release);
 	ProcessThread = std::thread(&RTTI::ProcessRTTI, this);
 	ProcessThread.detach();
 }
 
-std::string RTTI::GetProcessingStage()
+const std::string& RTTI::GetProcessingStage()
 {
 	std::scoped_lock Lock(ProcessingStageMutex);
-	std::string ProcessingStageCache = ProcessingStage;
+	ProcessingStageCache = ProcessingStage;
 	return ProcessingStageCache;
 }
 
-std::vector<uintptr_t> RTTI::ScanMemory(const std::shared_ptr<ClassMetaData>& CClass,
+std::vector<uintptr_t> RTTI::ScanMemory(const std::shared_ptr<ClassMetaData>& CMeta,
 	std::vector<std::future<FMemoryBlock>>& Blocks,
 	bool bInstanceScan)
-{
-	std::vector<FMemoryBlock> BlocksToFree;
-	std::vector<uintptr_t> Results;
+{	std::vector<uintptr_t> Results;
 
 	for (auto& Block : Blocks)
 	{
 		Block.wait();
 		FMemoryBlock MemoryBlock = Block.get();
-		if (MemoryBlock.Size == 0) continue;
-		if (!MemoryBlock.Copy) continue;
 
-		BlocksToFree.push_back(MemoryBlock);
-
-		uintptr_t MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy);
-		uintptr_t MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
+		auto MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy.data());
+		auto MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
 
 		for (uintptr_t i = MemoryBlockCopy; i < MemoryBlockCopy + MemoryBlock.Size; i += (bInstanceScan ? 4 : 1))
 		{
@@ -139,57 +137,60 @@ std::vector<uintptr_t> RTTI::ScanMemory(const std::shared_ptr<ClassMetaData>& CC
 
 			if (bUse64BitScanner && !bInstanceScan)
 			{
-				Candidate = *(DWORD*)i;
+				Candidate = *reinterpret_cast<DWORD*>(i);
 				Candidate += RealAddress + 4;
 			}
 			else
 			{
-				Candidate = *(uintptr_t*)i;
+				Candidate = *reinterpret_cast<uintptr_t*>(i);
 			}
 
 			if (Candidate % sizeof(void*) != 0) continue; // Skip unaligned addresses
 
-			if (Candidate == CClass->VTable)
+			if (Candidate == CMeta->VTable)
 			{
 				const char* logMessage = bInstanceScan ? "Found %s Instance at 0x%p" : "Found reference to %s at 0x%p";
-				ClassDumper3::LogF(logMessage, CClass->Name.c_str(), RealAddress);
+				ClassDumper3::LogF(logMessage, CMeta->Name.c_str(), RealAddress);
 				Results.push_back(RealAddress);
 			}
 		}
 	}
 
-	for (FMemoryBlock& Block : BlocksToFree)
-	{
-		Block.FreeBlock();
-	}
-
 	return Results;
 }
 
-std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CClass)
+std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CMeta)
 {
-	if (!CClass) return std::vector<uintptr_t>();
+	if (!CMeta)
+	{
+		return {};
+	}
+
 	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetExecutableMemory();
-	std::vector<uintptr_t> References = ScanMemory(CClass, Blocks, false);
-	CClass->CodeReferences = References;
+	std::vector<uintptr_t> References = ScanMemory(CMeta, Blocks, false);
+	CMeta->CodeReferences = References;
 	bIsScanning.store(false, std::memory_order_release);
 	return References;
 }
 
-std::vector<uintptr_t> RTTI::ScanForClassInstances(const std::shared_ptr<ClassMetaData>& CClass)
+std::vector<uintptr_t> RTTI::ScanForClassInstances(const std::shared_ptr<ClassMetaData>& CMeta)
 {
-	if (!CClass) return std::vector<uintptr_t>();
+	if (!CMeta)
+	{
+		return {};
+	}
+
 	std::vector<std::future<FMemoryBlock>> Blocks = Process->AsyncGetReadableMemory();
-	std::vector<uintptr_t> Instances = ScanMemory(CClass, Blocks, true);
-	CClass->ClassInstances = Instances;
+	std::vector<uintptr_t> Instances = ScanMemory(CMeta, Blocks, true);
+	CMeta->ClassInstances = Instances;
 	bIsScanning.store(false, std::memory_order_release);
 	return Instances;
 }
 
 void RTTI::ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstances, std::mutex& mtx)
 {
-	uintptr_t MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy);
-	uintptr_t MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
+	auto MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy.data());
+	auto MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
 
 	for (uintptr_t i = MemoryBlockCopy; i < MemoryBlockCopy + MemoryBlock.Size; i += (isForInstances ? 4 : 1))
 	{
@@ -198,12 +199,12 @@ void RTTI::ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstanc
 
 		if (bUse64BitScanner && !isForInstances)
 		{
-			Candidate = *(DWORD*)i;
+			Candidate = *reinterpret_cast<DWORD*>(i);
 			Candidate += RealAddress + 4;
 		}
 		else
 		{
-			Candidate = *(uintptr_t*)i;
+			Candidate = *reinterpret_cast<uintptr_t*>(i);
 		}
 
 		if (Candidate % sizeof(void*) != 0) continue; // Skip unaligned addresses
@@ -216,43 +217,35 @@ void RTTI::ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstanc
 
 			std::scoped_lock Lock(mtx);
 			if (isForInstances)
+			{
 				it->second->ClassInstances.push_back(RealAddress);
+			}
 			else
+			{
 				it->second->CodeReferences.push_back(RealAddress);
+			}
 		}
 	}
 }
 
 void RTTI::ScanAllMemory(std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances)
 {
-	std::vector<FMemoryBlock> BlocksToFree;
+	std::mutex mtx;
+	ThreadPool pool(std::thread::hardware_concurrency());
+
+	for (auto& Block : Blocks)
 	{
-		std::mutex mtx;
-
-		ThreadPool pool(std::thread::hardware_concurrency());
-
-		for (auto& Block : Blocks)
+		pool.enqueue([&]() mutable
 		{
-			pool.enqueue([&]() mutable
-			{
-					Block.wait();
-					FMemoryBlock MemoryBlock = Block.get();
-					if (MemoryBlock.Size == 0) return;
-					if (!MemoryBlock.Copy) return;
+				Block.wait();
+				FMemoryBlock MemoryBlock = Block.get();
+				if (!MemoryBlock.IsValid())
+				{
+					return;
+				}
 
-					{
-						std::scoped_lock Lock(mtx);
-						BlocksToFree.push_back(MemoryBlock);
-					}
-
-					ProcessMemoryBlock(MemoryBlock, isForInstances, mtx);
-			});
-		}
-	}
-
-	for (FMemoryBlock& Block : BlocksToFree)
-	{
-		Block.FreeBlock();
+				ProcessMemoryBlock(MemoryBlock, isForInstances, mtx);
+		});
 	}
 }
 
@@ -270,7 +263,7 @@ void RTTI::ScanForAllClassInstances()
 
 void RTTI::ScanAll()
 {
-	for (std::shared_ptr<ClassMetaData>& Class : Classes)
+	for (const std::shared_ptr<ClassMetaData>& Class : Classes)
 	{
 		Class->CodeReferences.clear();
 		Class->ClassInstances.clear();
@@ -291,21 +284,21 @@ void RTTI::ScanAllAsync()
 	ScannerThread.detach();
 }
 
-void RTTI::ScanForCodeReferencesAsync(const std::shared_ptr<ClassMetaData>& CClass)
+void RTTI::ScanForCodeReferencesAsync(const std::shared_ptr<ClassMetaData>& CMeta)
 {
 	if (bIsScanning.load(std::memory_order_acquire)) return;
 
 	bIsScanning.store(true, std::memory_order_release);
-	ScannerThread = std::thread(&RTTI::ScanForCodeReferences, this, CClass);
+	ScannerThread = std::thread(&RTTI::ScanForCodeReferences, this, CMeta);
 	ScannerThread.detach();
 }
 
-void RTTI::ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CClass)
+void RTTI::ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CMeta)
 {
 	if (bIsScanning.load(std::memory_order_acquire)) return;
 
 	bIsScanning.store(true, std::memory_order_release);
-	ScannerThread = std::thread(&RTTI::ScanForClassInstances, this, CClass);
+	ScannerThread = std::thread(&RTTI::ScanForClassInstances, this, CMeta);
 	ScannerThread.detach();
 }
 
@@ -323,9 +316,10 @@ void RTTI::FindValidSections()
 		{
 			ExecutableSections.push_back(section);
 			bFoundExecutable = true;
+			continue;
 		}
 
-		if (section.bFlagReadonly && !section.bFlagExecutable)
+		if (section.bFlagReadonly)
 		{
 			ReadOnlySections.push_back(section);
 			bFoundReadOnly = true;
@@ -340,81 +334,64 @@ void RTTI::FindValidSections()
 }
 
 bool RTTI::IsInExecutableSection(uintptr_t Address)
-{
-	for (const FModuleSection& Section : ExecutableSections)
-	{
-		if (Section.Contains(Address))
-		{
-			return true;
-		}
-	}
-	return false;
+{	
+	return std::any_of(ExecutableSections.begin(), ExecutableSections.end(), [&](const FModuleSection& Section) { return Section.Contains(Address); });
 }
 
 bool RTTI::IsInReadOnlySection(uintptr_t Address)
 {
-	for (const FModuleSection& Section : ReadOnlySections)
-	{
-		if (Section.Contains(Address))
-		{
-			return true;
-		}
-	}
-	return false;
+	return std::any_of(ReadOnlySections.begin(), ReadOnlySections.end(), [&](const FModuleSection& Section) { return Section.Contains(Address); });
 }
 
 void RTTI::ScanForClasses(std::vector<PotentialClass>& PotentialClasses)
 {
 	SetProcessingStage("Scanning for potential classes...");
-	uintptr_t* SectionBuffer;
-	size_t TotalSectionSize = 0;
 
-	for (const FModuleSection& Section : ReadOnlySections)
-	{
-		TotalSectionSize += Section.Size();
-	}
-	
-	// now we only need one buffer alloc
-	SectionBuffer = reinterpret_cast<uintptr_t*>(malloc(TotalSectionSize));
+	auto Accumulator = [](size_t sum, const FModuleSection& Section)
+		{ return sum + Section.Size(); };
 
-	if (!SectionBuffer)
-	{
-		std::cout << "Out of memory: line" << __LINE__;
-		exit(-1);
-	}
-	
-	memset(SectionBuffer, 0, TotalSectionSize);
-	
+	size_t TotalSectionSize = std::accumulate(ReadOnlySections.begin(), ReadOnlySections.end(), size_t(0), Accumulator);
+
+	auto SectionBuffer = std::vector<uintptr_t>(TotalSectionSize / sizeof(uintptr_t));
+
 	for (const FModuleSection& Section : ReadOnlySections)
 	{
 		size_t SectionSize = Section.Size();
-		size_t Max = SectionSize / sizeof(uintptr_t);
+		size_t SectionMax = SectionSize / sizeof(uintptr_t);
 
-		
-		memset(SectionBuffer, 0, TotalSectionSize);
-		Process->Read(Section.Start, SectionBuffer, SectionSize);
+		Process->Read(Section.Start, SectionBuffer.data(), SectionSize);
 
-		
-		for (size_t i = 0; i < Max; i++)
+		for (size_t Index = 0; Index < SectionMax; Index++)
 		{
-			if (SectionBuffer[i] == 0 || i + 1 > Max)
+			if (Index >= SectionBuffer.size() || Index + 1 >= SectionBuffer.size())
+			{
+				ClassDumper3::Log("Error: Index out of bounds in RTTI scan");
+				break;
+			}
+			
+			// if nullptr or we are at the end of the section
+			if (SectionBuffer[Index] == 0 || Index + 1 > SectionMax)
 			{
 				continue;
 			}
 
-			if (IsInReadOnlySection(SectionBuffer[i]) && IsInExecutableSection(SectionBuffer[i + 1]))
+			// first pointer is not a valid RTTI object or the second pointer is not a valid VTable function ptr
+			if (!IsInReadOnlySection(SectionBuffer[Index]) || !IsInExecutableSection(SectionBuffer[Index + 1]))
 			{
-				PotentialClass PClass;
-				PClass.CompleteObjectLocator = SectionBuffer[i];
-				PClass.VTable = Section.Start + (i + 1) * (sizeof(uintptr_t));
-				PotentialClasses.push_back(PClass);
+				continue;
 			}
+			
+			PotentialClass& PClass = PotentialClasses.emplace_back();
+			PClass.CompleteObjectLocator = SectionBuffer[Index];
+			// VTables are in order in MSVC so we can just add the index to the start of the section
+			PClass.VTable = Section.Start + (Index + 1) * sizeof(uintptr_t);
+
 		}
 	}
 	
-	free(SectionBuffer);
-	ClassDumper3::LogF("Found %u potential classes in %s\n", PotentialClasses.size(), ModuleName.c_str()); 
+	ClassDumper3::LogF("Found %u potential classes in %s\n", PotentialClasses.size(), ModuleName.c_str());
 }
+
 
 void RTTI::ValidateClasses(std::vector<PotentialClass>& PotentialClasses)
 {
@@ -465,14 +442,14 @@ void RTTI::ValidateClasses(std::vector<PotentialClass>& PotentialClasses)
 	ClassDumper3::LogF("Found %u valid classes in %s\n", Classes.size(), ModuleName.c_str());
 }
 
-void RTTI::ProcessClasses(std::vector<PotentialClass>& FinalClasses)
+void RTTI::ProcessClasses(const std::vector<PotentialClass>& FinalClasses)
 {
 	SetProcessingStage("Processing class data...");
 
 	std::string LastClassName = "";
 	std::shared_ptr<ClassMetaData> LastClass = nullptr;
 
-	for (PotentialClass& PClassFinal : FinalClasses)
+	for (const PotentialClass& PClassFinal : FinalClasses)
 	{
 		RTTICompleteObjectLocator CompleteObjectLocator;
 		RTTIClassHierarchyDescriptor ClassHierarchyDescriptor;
@@ -541,94 +518,96 @@ void RTTI::ProcessParentClasses()
 {
 	// process parent classes
 	SetProcessingStage("Processing parent class data...");
-
-	int interfaceCount = 0;
-
-	for (std::shared_ptr<ClassMetaData>& CClass : Classes)
+	
+	for (const std::shared_ptr<ClassMetaData>& CMeta : Classes)
 	{
-		if (CClass->numBaseClasses > 1)
+		if (CMeta->numBaseClasses <= 1)
 		{
-			// read class array (skip the first one)
-			std::unique_ptr<DWORD[]> baseClassArray = std::make_unique<DWORD[]>(0x4000);
+			continue;
+		}
 
-			RTTICompleteObjectLocator CompleteObjectLocator;
-			RTTIClassHierarchyDescriptor ClassHierarchyDescriptor;
+		// read class array (skip the first one)
+		std::unique_ptr<DWORD[]> baseClassArray = std::make_unique<DWORD[]>(0x4000);
 
-			std::vector<uintptr_t> BaseClasses;
-			BaseClasses.reserve(CClass->numBaseClasses);
+		RTTICompleteObjectLocator CompleteObjectLocator;
+		RTTIClassHierarchyDescriptor ClassHierarchyDescriptor;
 
-			Process->Read(CClass->CompleteObjectLocator, &CompleteObjectLocator, sizeof(RTTICompleteObjectLocator));
+		std::vector<uintptr_t> BaseClasses;
+		BaseClasses.reserve(CMeta->numBaseClasses);
 
-			uintptr_t pClassDescriptor = CompleteObjectLocator.pClassDescriptor + ModuleBase;
+		Process->Read(CMeta->CompleteObjectLocator, &CompleteObjectLocator, sizeof(RTTICompleteObjectLocator));
 
-			Process->Read(pClassDescriptor, &ClassHierarchyDescriptor, sizeof(RTTIClassHierarchyDescriptor));
+		uintptr_t pClassDescriptor = CompleteObjectLocator.pClassDescriptor + ModuleBase;
 
-			uintptr_t pBaseClassArray = ClassHierarchyDescriptor.pBaseClassArray + ModuleBase;
-			Process->Read(pBaseClassArray, baseClassArray.get(), sizeof(uintptr_t) * CClass->numBaseClasses - 1);
+		Process->Read(pClassDescriptor, &ClassHierarchyDescriptor, sizeof(RTTIClassHierarchyDescriptor));
 
-			for (unsigned int i = 0; i < CClass->numBaseClasses - 1; i++)
+		uintptr_t pBaseClassArray = ClassHierarchyDescriptor.pBaseClassArray + ModuleBase;
+		Process->Read(pBaseClassArray, baseClassArray.get(), sizeof(uintptr_t) * CMeta->numBaseClasses - 1);
+
+		for (unsigned int i = 0; i < CMeta->numBaseClasses - 1; ++i)
+		{
+			BaseClasses.emplace_back(baseClassArray[i] + ModuleBase);
+		}
+
+		DWORD LastDisplacement = 0;
+		DWORD Depth = 0;
+
+		for (unsigned int i = 0; i < CMeta->numBaseClasses - 1; i++)
+		{
+			RTTIBaseClassDescriptor BaseClassDescriptor;
+			std::shared_ptr<ParentClass> ParentClassNode = std::make_shared<ParentClass>();
+			Process->Read(BaseClasses[i], &BaseClassDescriptor, sizeof(RTTIBaseClassDescriptor));
+
+			// process child name
+			char name[StandardBufferSize];
+
+			Process->Read((uintptr_t)BaseClassDescriptor.pTypeDescriptor + ModuleBase + offsetof(RTTITypeDescriptor, name), name, StandardBufferSize);
+			name[StandardBufferSize - 1] = 0;
+
+			ParentClassNode->MangledName = name;
+			ParentClassNode->Name = DemangleMSVC(name);
+			ParentClassNode->attributes = BaseClassDescriptor.attributes;
+			FilterSymbol(ParentClassNode->Name);
+
+			ParentClassNode->ChildClass = CMeta;
+			ParentClassNode->Class = FindFirst(ParentClassNode->Name);
+			ParentClassNode->numContainedBases = BaseClassDescriptor.numContainedBases;
+			ParentClassNode->where = BaseClassDescriptor.where;
+
+			if (BaseClassDescriptor.where.mdisp == LastDisplacement)
 			{
-				BaseClasses.push_back(baseClassArray[i] + ModuleBase);
+				Depth++;
+			}
+			else
+			{
+				LastDisplacement = BaseClassDescriptor.where.mdisp;
+				Depth = 0;
 			}
 
-			DWORD LastDisplacement = 0;
-			DWORD Depth = 0;
+			ParentClassNode->TreeDepth = Depth;
 
-			for (unsigned int i = 0; i < CClass->numBaseClasses - 1; i++)
+			if (CMeta->VTableOffset == ParentClassNode->where.mdisp && CMeta->bInterface)
 			{
-				RTTIBaseClassDescriptor BaseClassDescriptor;
-				std::shared_ptr<ParentClass> ParentClassNode = std::make_shared<ParentClass>();
-				Process->Read(BaseClasses[i], &BaseClassDescriptor, sizeof(RTTIBaseClassDescriptor));
-
-				// process child name
-				char name[StandardBufferSize];
-
-				Process->Read((uintptr_t)BaseClassDescriptor.pTypeDescriptor + ModuleBase + offsetof(RTTITypeDescriptor, name), name, StandardBufferSize);
-				name[StandardBufferSize - 1] = 0;
-
-				ParentClassNode->MangledName = name;
-				ParentClassNode->Name = DemangleMSVC(name);
-				ParentClassNode->attributes = BaseClassDescriptor.attributes;
-				FilterSymbol(ParentClassNode->Name);
-
-				ParentClassNode->ChildClass = CClass;
-				ParentClassNode->Class = FindFirst(ParentClassNode->Name);
-				ParentClassNode->numContainedBases = BaseClassDescriptor.numContainedBases;
-				ParentClassNode->where = BaseClassDescriptor.where;
-
-				if (BaseClassDescriptor.where.mdisp == LastDisplacement)
-				{
-					Depth++;
-				}
-				else
-				{
-					LastDisplacement = BaseClassDescriptor.where.mdisp;
-					Depth = 0;
-				}
-				ParentClassNode->TreeDepth = Depth;
-				if (CClass->VTableOffset == ParentClassNode->where.mdisp && CClass->bInterface)
-				{
-					std::string OriginalName = CClass->Name;
-					CClass->Name = ParentClassNode->Name;
-					CClass->FormattedName = "interface " + OriginalName + " -> " + ParentClassNode->Name;
-					CClass->MangledName = ParentClassNode->MangledName;
-				}
-				CClass->Parents.push_back(ParentClassNode);
+				std::string OriginalName = CMeta->Name;
+				CMeta->Name = ParentClassNode->Name;
+				CMeta->FormattedName = "interface " + OriginalName + " -> " + ParentClassNode->Name;
+				CMeta->MangledName = ParentClassNode->MangledName;
 			}
+			CMeta->Parents.push_back(ParentClassNode);
 		}
 	}
 }
 
-void RTTI::EnumerateVirtualFunctions(std::shared_ptr<ClassMetaData>& CClass)
+void RTTI::EnumerateVirtualFunctions(const std::shared_ptr<ClassMetaData>& CMeta)
 {
 	constexpr int MaximumVirtualFunctions = 0x4000;
 	static std::unique_ptr<uintptr_t[]> buffer = std::make_unique<uintptr_t[]>(MaximumVirtualFunctions);
 	
 	memset(buffer.get(), 0, sizeof(uintptr_t) * MaximumVirtualFunctions);
 	
-	CClass->Functions.clear();
+	CMeta->Functions.clear();
 	
-	Process->Read(CClass->VTable, buffer.get(), MaximumVirtualFunctions);
+	Process->Read(CMeta->VTable, buffer.get(), MaximumVirtualFunctions);
 	
 	for (size_t i = 0; i < MaximumVirtualFunctions / sizeof(uintptr_t); i++)
 	{
@@ -642,10 +621,10 @@ void RTTI::EnumerateVirtualFunctions(std::shared_ptr<ClassMetaData>& CClass)
 			break;
 		}
 		
-		CClass->Functions.push_back(buffer[i]);
+		CMeta->Functions.push_back(buffer[i]);
 		
 		std::string function_name = "sub_" + IntegerToHexStr(buffer[i]);
-		CClass->FunctionNames.try_emplace(buffer[i], function_name);
+		CMeta->FunctionNames.try_emplace(buffer[i], function_name);
 	}
 }
 
@@ -680,7 +659,7 @@ std::string RTTI::DemangleMSVC(char* Symbol)
 void RTTI::SortClasses(std::vector<PotentialClass>& Classes)
 {
 	SetProcessingStage("Sorting classes...");
-	std::sort(Classes.begin(), Classes.end(), [=](PotentialClass a, PotentialClass b){ return a.DemangledName < b.DemangledName; });
+	std::sort(Classes.begin(), Classes.end(), [&](const PotentialClass& a, const PotentialClass& b){ return a.DemangledName < b.DemangledName; });
 }
 
 void RTTI::FilterSymbol(std::string& Symbol)
@@ -702,21 +681,15 @@ void RTTI::FilterSymbol(std::string& Symbol)
 	}
 }
 
-void RTTI::SetProcessingStage(std::string Stage)
+void RTTI::SetProcessingStage(const std::string& Stage)
 {
 	std::scoped_lock Lock(ProcessingStageMutex);
 	ProcessingStage = Stage;
 }
 
-bool ClassMetaData::IsChildOf(const std::shared_ptr<ClassMetaData>& CClass) const
+bool ClassMetaData::IsChildOf(const std::shared_ptr<ClassMetaData>& CMeta) const
 {
-	for (const std::shared_ptr<ParentClass>& Parent : Parents)
-	{
-		if (Parent->Name == CClass->Name)
-		{
-			return true;
-		}
-	}
-	
-	return false;
+	return std::any_of(Parents.begin(), Parents.end(),
+		[&](const std::shared_ptr<ParentClass>& Parent)
+		{ return Parent->Name == CMeta->Name; });
 }

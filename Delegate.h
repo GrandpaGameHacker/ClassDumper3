@@ -15,7 +15,7 @@ public:
 	Delegate() = default;
 
 	template <typename Callable>
-	Delegate(Callable&& callable)
+	explicit Delegate(Callable&& callable)
 	{
 		static_assert(std::is_invocable_v<Callable, Args...>,
 			"Callable must be invocable with specified arguments");

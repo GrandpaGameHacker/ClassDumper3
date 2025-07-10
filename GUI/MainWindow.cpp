@@ -8,6 +8,10 @@ MainWindow::MainWindow()
 {
 	ProcessFilter = "";
 	RefreshProcessList();
+	if (GetDebugPrivilege())
+	{
+		Title = "ClassDumper3 | SE_DEBUG_PRIVILEGE ON";
+	}
 }
 
 MainWindow::~MainWindow()
@@ -23,7 +27,7 @@ void MainWindow::Draw()
     ImGui::SetNextWindowPos(windowPos, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(windowSize, ImGuiCond_FirstUseEver);
 
-    ImGui::Begin("ClassDumper3", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
+    ImGui::Begin(Title.c_str(), nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
     if (ImGui::Button("Exit")) exit(0);
 
@@ -36,9 +40,16 @@ void MainWindow::Draw()
     ImGui::Separator();
     ImGui::SameLine();
 
-    if (ImGui::Button("Refresh/Filter")) RefreshProcessList();
+	if (ImGui::Button("Refresh/Filter"))
+	{
+		RefreshProcessList();
+	}
+
     ImGui::SameLine();
-    if (ImGui::Button("Scan RTTI")) SelectProcess();
+	if (ImGui::Button("Scan RTTI"))
+	{
+		SelectProcess();
+	}
 
     DrawClassList();
 
@@ -50,16 +61,18 @@ void MainWindow::DrawProcessList()
 {
 	ImGui::InputText("Process filter...", &ProcessFilter);
 
-	if (!ImGui::BeginCombo("##ProcessCombo", SelectedProcessName.c_str())) return;
+	if (!ImGui::BeginCombo("##ProcessCombo", SelectedProcessName.c_str()))
+	{
+		return;
+	}
 
 	for (const auto& Process : ProcessList)
 	{
-		bool isSelected = (SelectedProcessName == Process.ProcessListName);
+		const bool bIsSelected = (SelectedProcessName == Process.ProcessListName);
 
-		if (ImGui::Selectable(Process.ProcessListName.c_str(), isSelected))
+		if (ImGui::Selectable(Process.ProcessListName.c_str(), bIsSelected))
 		{
-			Target = std::make_shared<FTargetProcess>();
-			Target->Setup(Process.PID);
+			Target = std::make_shared<FTargetProcess>(Process.PID);
 
 			if (!Target->IsValid())
 			{
@@ -97,8 +110,7 @@ void MainWindow::DrawModuleList()
 
 void MainWindow::RefreshProcessList()
 {
-	if(ProcessFilter.empty()) ProcessList = GetProcessList();
-	else ProcessList = GetProcessList(ProcessFilter);
+	ProcessList = GetProcessList(ProcessFilter);
 }
 
 void MainWindow::SelectProcess()
@@ -131,7 +143,10 @@ void MainWindow::FilterChildren()
 
 void MainWindow::DrawClassList()
 {
-	if (!RTTIObserver) return;
+	if (!RTTIObserver)
+	{
+		return;
+	}
 
 	if (RTTIObserver->IsAsyncProcessing())
 	{
@@ -156,10 +171,7 @@ void MainWindow::DrawClassList()
 
 	if (ImGui::Button("Scan For All References & Instances"))
 	{
-		for (auto& Class : RTTIObserver->GetClasses())
-		{
-			RTTIObserver->ScanAllAsync();
-		}
+		RTTIObserver->ScanAllAsync();
 	}
 
 	if (RTTIObserver->IsAsyncScanning())
@@ -211,21 +223,21 @@ void MainWindow::DrawClassList()
 	ImGui::EndChildFrame();
 }
 
-void MainWindow::DrawClass(const std::shared_ptr<ClassMetaData>& CClass)
+void MainWindow::DrawClass(const std::shared_ptr<ClassMetaData>& CMeta)
 {
 	auto SelectedClassLocked = SelectedClass.lock();
-	bool bSelected = SelectedClassLocked && SelectedClassLocked->VTable == CClass->VTable;
+	bool bSelected = SelectedClassLocked && SelectedClassLocked->VTable == CMeta->VTable;
 	
 	if (bSelected) ImGui::PushStyleColor(ImGuiCol_Text, { 0, 255, 0, 255 });
 
-	ImGui::Text(CClass->FormattedName.c_str());
+	ImGui::Text(CMeta->FormattedName.c_str());
 
 	if (bSelected) ImGui::PopStyleColor(1);
 
 	if (ImGui::IsItemClicked(0))
 	{
-		OnClassSelected(CClass);
-		SelectedClass = CClass;
+		OnClassSelected(CMeta);
+		SelectedClass = CMeta;
 	}
 }
 

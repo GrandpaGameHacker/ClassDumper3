@@ -34,4 +34,6 @@ protected:
 	std::shared_ptr<FTargetProcess> Target;
 	std::shared_ptr<RTTI> RTTIObserver;
 	std::weak_ptr<ClassMetaData> SelectedClass;
+
+	std::string Title = "ClassDumper3";
 };

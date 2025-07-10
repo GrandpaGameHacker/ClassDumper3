@@ -17,7 +17,7 @@ LogWindow::~LogWindow()
 
 void LogWindow::Draw()
 {
-	ImGuiIO& io = ImGui::GetIO();
+	const ImGuiIO& io = ImGui::GetIO();
 	ImVec2 screenSize = io.DisplaySize;
 
 	float windowHeight = screenSize.y / 4;  // 1/4 of the screen height
@@ -29,7 +29,6 @@ void LogWindow::Draw()
 	ImGui::SetNextWindowSize(windowSize);
 	
 	ImGui::Begin("Log", nullptr, ImGuiWindowFlags_NoCollapse);
-	size_t Idx = 0;
 	
 	if (ImGui::Button("Clear Log"))
 	{
@@ -39,6 +38,7 @@ void LogWindow::Draw()
 	ImGui::BeginChild("Scrolling");
 	{
 		std::scoped_lock Lock(LogMutex);
+		size_t Idx = 0;
 		for (auto It = LogHistory.rbegin(); It != LogHistory.rend(); It++)
 		{
 			ImGui::Text("%s", It->c_str());

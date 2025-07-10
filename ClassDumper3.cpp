@@ -126,7 +126,6 @@ void ClassDumper3::LogF(std::string Format, ...)
 	
 	if (!LogWnd) return;
 	const char* FormatC = Format.c_str();
-	if (!LogWnd) return;
 
 	va_list Args;
 	va_start(Args, Format);
@@ -175,7 +174,7 @@ void ClassDumper3::CopyToClipboard(const std::string& InString)
 		if (ClipboardDataHandle != 0)
 		{
 			char* PCHData;
-			PCHData = (char*)GlobalLock(ClipboardDataHandle);
+			PCHData = reinterpret_cast<char*>(GlobalLock(ClipboardDataHandle));
 
 			if (PCHData)
 			{

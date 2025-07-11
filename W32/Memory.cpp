@@ -11,6 +11,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include "../Util/Strings.h"
 
 // ---------------------------------------------
 // Process Listing / Utility
@@ -52,8 +53,10 @@ std::vector<FProcessListItem> GetProcessList(const std::string& Filter)
 		Item.PID = Entry.th32ProcessID;
 		Item.Name = Entry.szExeFile;
 		Item.ProcessListName = std::to_string(Item.PID) + " : " + Item.Name;
+		std::string loweredName = Item.Name;
+		StrLower(loweredName);
 
-		if (bUseFilter && Item.Name.find(Filter) == std::string::npos)
+		if (bUseFilter && loweredName.find(Filter) == std::string::npos)
 		{
 			continue;
 		}
@@ -462,12 +465,12 @@ FModuleSection* FTargetProcess::GetModuleSection(uintptr_t Address)
 
 std::future<FMemoryBlock> FTargetProcess::ReadMemoryAsync(const FMemoryRange& Range)
 {
-	return std::async(std::launch::async, [Range, &Process = Process]() {
+	return std::async(std::launch::async, [Range, Handle = Process.ProcessHandle]() {
 		FMemoryBlock Block(Range.Start, Range.Size());
 
 		if (Block.IsValid())
 		{
-			ReadProcessMemory(Process.ProcessHandle, Block.Address, Block.Copy.data(), Block.Size, nullptr);
+			ReadProcessMemory(Handle, Block.Address, Block.Copy.data(), Block.Size, nullptr);
 		}
 
 		return Block;
@@ -548,12 +551,12 @@ void FTargetProcess::Read(uintptr_t Address, void* Buffer, size_t Size)
 std::future<std::vector<uint8_t>> FTargetProcess::AsyncRead(uintptr_t Address, size_t Size)
 {
 	return std::async(std::launch::async,
-		[this, Address, Size]()
+		[Handle = Process.ProcessHandle, Address, Size]()
 		{
 			std::vector<uint8_t> Buffer(Size);
 			if (!Buffer.empty())
 			{
-				ReadProcessMemory(Process.ProcessHandle, reinterpret_cast<void*>(Address), Buffer.data(), Size, NULL);
+				ReadProcessMemory(Handle, reinterpret_cast<void*>(Address), Buffer.data(), Size, NULL);
 			}
 			return Buffer;
 		});

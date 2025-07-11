@@ -1,9 +1,9 @@
+#include "../Util/Strings.h"
 #include "MainWindow.h"
 #include "../ClassDumper3.h"
 #include "imgui_stl.h"
 #include <iostream>
 #include "CustomWidgets.h"
-
 MainWindow::MainWindow()
 {
 	ProcessFilter = "";
@@ -14,53 +14,53 @@ MainWindow::MainWindow()
 	}
 }
 
-MainWindow::~MainWindow()
-{
-}
-
 void MainWindow::Draw()
 {
-    ImVec2 screenSize = ImGui::GetIO().DisplaySize;
-    ImVec2 windowSize(screenSize.x, screenSize.y * 0.75f);
-    ImVec2 windowPos(0, 0);
+	ImVec2 screenSize = ImGui::GetIO().DisplaySize;
+	ImVec2 windowSize(screenSize.x, screenSize.y * 0.75f);
+	ImVec2 windowPos(0, 0);
 
-    ImGui::SetNextWindowPos(windowPos, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(windowSize, ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowPos(windowPos, ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(windowSize, ImGuiCond_FirstUseEver);
 
-    ImGui::Begin(Title.c_str(), nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
+	ImGui::Begin(Title.c_str(), nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-    if (ImGui::Button("Exit")) exit(0);
+	if (ImGui::Button("Exit"))
+		exit(0);
 
-    ImGui::Text("Select a process to dump classes from:");
-    ImGui::Separator();
+	ImGui::Separator();
 
-    DrawProcessList();
-	DrawModuleList();
-
-    ImGui::Separator();
-    ImGui::SameLine();
-
-	if (ImGui::Button("Refresh/Filter"))
+	if (ImGui::CollapsingHeader("Process & Module Selection", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		RefreshProcessList();
+		DrawProcessList();
+		DrawModuleList();
+
+		if (ImGui::Button("Scan RTTI"))
+		{
+			SelectProcess();
+		}
 	}
 
-    ImGui::SameLine();
-	if (ImGui::Button("Scan RTTI"))
+	if (ImGui::CollapsingHeader("Class Viewer", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		SelectProcess();
+		DrawClassList();
 	}
 
-    DrawClassList();
-
-    ImGui::End();
+	ImGui::End();
 }
 
 
 void MainWindow::DrawProcessList()
 {
-	ImGui::InputText("Process filter...", &ProcessFilter);
+	ImGui::PushItemWidth(250);
+	ImGui::InputText("Process Filter", &ProcessFilter);
+	ImGui::PopItemWidth();
 
+	ImGui::SameLine();
+	if (ImGui::Button("Refresh"))
+	{
+		RefreshProcessList();
+	}
 	if (!ImGui::BeginCombo("##ProcessCombo", SelectedProcessName.c_str()))
 	{
 		return;
@@ -110,7 +110,9 @@ void MainWindow::DrawModuleList()
 
 void MainWindow::RefreshProcessList()
 {
-	ProcessList = GetProcessList(ProcessFilter);
+	std::string LowerFilter = ProcessFilter;
+	StrLower(ProcessFilter);
+	ProcessList = GetProcessList(LowerFilter);
 }
 
 void MainWindow::SelectProcess()
@@ -134,7 +136,7 @@ void MainWindow::FilterClasses(const std::string& filter)
 
 void MainWindow::FilterChildren()
 {
-	auto SelectedClassLocked = SelectedClass.lock();
+	auto SelectedClassLocked = SelectedClassWeak.lock();
 	if (!SelectedClassLocked) return;
 	
 	FilteredChildrenCache = RTTIObserver->FindChildClasses(SelectedClassLocked);
@@ -143,33 +145,28 @@ void MainWindow::FilterChildren()
 
 void MainWindow::DrawClassList()
 {
-	if (!RTTIObserver)
-	{
-		return;
-	}
+	if (!RTTIObserver) return;
 
 	if (RTTIObserver->IsAsyncProcessing())
 	{
 		ImGui::Text("Processing...");
 		ImGui::Text("%s", RTTIObserver->GetProcessingStage().c_str());
-		ImGui::Spinner("Spinner", 10, 10, 0xFF0000FF);
+		ImGui::Spinner("ProcessingSpinner", 10, 10, 0xFF0000FF);
 		return;
 	}
 
-	if (RTTIObserver->GetClasses().empty()) return;
+	auto SelectedClass = SelectedClassWeak.lock();
 
 	ImGui::Text("Class Filter:");
-
-	if (ImGui::InputText("##", &ClassFilter, 0))
+	ImGui::PushItemWidth(250);
+	if (ImGui::InputText("##ClassFilter", &ClassFilter, 0))
 	{
 		FilterClasses(ClassFilter);
 	}
-	else if (ClassFilter.empty() && !FilteredClassesCache.empty())
-	{
-		FilteredClassesCache.clear();
-	}
+	ImGui::PopItemWidth();
 
-	if (ImGui::Button("Scan For All References & Instances"))
+	ImGui::SameLine();
+	if (ImGui::Button("Scan All References"))
 	{
 		RTTIObserver->ScanAllAsync();
 	}
@@ -177,30 +174,26 @@ void MainWindow::DrawClassList()
 	if (RTTIObserver->IsAsyncScanning())
 	{
 		ImGui::SameLine();
-		ImGui::Text("Scan in progress...");
+		ImGui::Text("Scanning...");
 		ImGui::SameLine();
-		ImGui::Spinner("Spinner", 10, 10, 0xFF0000FF);
+		ImGui::Spinner("ScanSpinner", 10, 10, 0xFF0000FF);
 	}
 
-	
 	if (ImGui::Button("Filter Children"))
 	{
-		ClassFilter = "";
+		ClassFilter.clear();
 		FilteredClassesCache.clear();
 		FilterChildren();
 	}
-	
+
 	ImGui::SameLine();
-	
 	if (ImGui::Button("Clear Child Filter"))
 	{
 		FilteredChildrenCache.clear();
 	}
 
-	ImGui::BeginChildFrame(1, ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight()));
-
 	auto ClassesToDraw = RTTIObserver->GetClasses();
-	
+
 	if (!ClassFilter.empty() && !FilteredClassesCache.empty())
 	{
 		ClassesToDraw = FilteredClassesCache;
@@ -210,34 +203,81 @@ void MainWindow::DrawClassList()
 		ClassesToDraw = FilteredChildrenCache;
 	}
 
+	ImGui::BeginChild("ClassListFrame", ImVec2(0, 0), true);
+
 	if (ClassesToDraw.empty())
 	{
-		ImGui::Text("No classes found for this filter");
+		ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "No classes found for this filter.");
 	}
-
-	for (const auto& cl : ClassesToDraw)
+	else if (ImGui::BeginTable("ClassTable", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders))
 	{
-		DrawClass(cl);
+		ImGui::TableSetupColumn("Class Name");
+		ImGui::TableSetupColumn("Functions");
+		ImGui::TableSetupColumn("VTable");
+		ImGui::TableHeadersRow();
+
+		for (const auto& Class : ClassesToDraw)
+		{
+			const bool bIsSelected = SelectedClass && SelectedClass->VTable == Class->VTable;
+
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+
+			// Determine colors
+			if (bIsSelected)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0, 1, 0, 1));
+			}
+			else if (Class->bStruct)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
+			}
+			else if (Class->bInterface)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 1, 1));
+			}
+
+			ImGui::TextUnformatted(Class->Name.c_str());
+
+			if (bIsSelected || Class->bStruct || Class->bInterface)
+			{
+				ImGui::PopStyleColor();
+			}
+
+			if (ImGui::IsItemClicked())
+			{
+				OnClassSelected(Class);
+				SelectedClassWeak = Class;
+			}
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::Text("%d", Class->Functions.size());
+
+			ImGui::TableSetColumnIndex(2);
+			ImGui::Text("0x%p", reinterpret_cast<void*>(Class->VTable));
+		}
+
+		ImGui::EndTable();
 	}
 
-	ImGui::EndChildFrame();
+	ImGui::EndChild();
 }
 
 void MainWindow::DrawClass(const std::shared_ptr<ClassMetaData>& CMeta)
 {
-	auto SelectedClassLocked = SelectedClass.lock();
+	auto SelectedClassLocked = SelectedClassWeak.lock();
 	bool bSelected = SelectedClassLocked && SelectedClassLocked->VTable == CMeta->VTable;
 	
 	if (bSelected) ImGui::PushStyleColor(ImGuiCol_Text, { 0, 255, 0, 255 });
 
-	ImGui::Text(CMeta->FormattedName.c_str());
+	ImGui::Text(CMeta->Name.c_str());
 
 	if (bSelected) ImGui::PopStyleColor(1);
 
 	if (ImGui::IsItemClicked(0))
 	{
 		OnClassSelected(CMeta);
-		SelectedClass = CMeta;
+		SelectedClassWeak = CMeta;
 	}
 }
 

@@ -1,16 +1,16 @@
 #include "RTTI.h"
-#include "../Util/Strings.h"
-#include "../ClassDumper3.h"
-#include "../Util/ThreadPool.h"
-#include <numeric>
 #include <DbgHelp.h>
+#include <numeric>
+#include "../ClassDumper3.h"
+#include "../Util/Strings.h"
+#include "../Util/ThreadPool.h"
 
 RTTI::RTTI(FTargetProcess* InProcess, const std::string& InModuleName)
 {
 	Process = InProcess;
 	Module = Process->ModuleMap.GetModule(InModuleName);
 	ModuleName = InModuleName;
-	
+
 	if (IsRunning64Bits())
 	{
 		ModuleBase = (uintptr_t)Module->BaseAddress;
@@ -39,7 +39,7 @@ std::shared_ptr<ClassMetaData> RTTI::FindFirst(const std::string& ClassName)
 	{
 		return it->second;
 	}
-	
+
 	return nullptr;
 }
 
@@ -86,7 +86,7 @@ std::vector<std::shared_ptr<ClassMetaData>> RTTI::GetClasses()
 void RTTI::ProcessRTTI()
 {
 	FindValidSections();
-	
+
 	std::vector<PotentialClass> PotentialClasses;
 	ScanForClasses(PotentialClasses);
 
@@ -104,7 +104,7 @@ void RTTI::ProcessRTTIAsync()
 	{
 		return;
 	}
-	
+
 	bIsProcessing.store(true, std::memory_order_release);
 	ProcessThread = std::thread(&RTTI::ProcessRTTI, this);
 	ProcessThread.detach();
@@ -115,48 +115,6 @@ const std::string& RTTI::GetProcessingStage()
 	std::scoped_lock Lock(ProcessingStageMutex);
 	ProcessingStageCache = ProcessingStage;
 	return ProcessingStageCache;
-}
-
-std::vector<uintptr_t> RTTI::ScanMemory(const std::shared_ptr<ClassMetaData>& CMeta,
-	std::vector<std::future<FMemoryBlock>>& Blocks,
-	bool bInstanceScan)
-{	std::vector<uintptr_t> Results;
-
-	for (auto& Block : Blocks)
-	{
-		Block.wait();
-		FMemoryBlock MemoryBlock = Block.get();
-
-		auto MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy.data());
-		auto MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
-
-		for (uintptr_t i = MemoryBlockCopy; i < MemoryBlockCopy + MemoryBlock.Size; i += (bInstanceScan ? 4 : 1))
-		{
-			uintptr_t Candidate = 0;
-			uintptr_t RealAddress = i - MemoryBlockCopy + MemoryBlockAddress;
-
-			if (bUse64BitScanner && !bInstanceScan)
-			{
-				Candidate = *reinterpret_cast<DWORD*>(i);
-				Candidate += RealAddress + 4;
-			}
-			else
-			{
-				Candidate = *reinterpret_cast<uintptr_t*>(i);
-			}
-
-			if (Candidate % sizeof(void*) != 0) continue; // Skip unaligned addresses
-
-			if (Candidate == CMeta->VTable)
-			{
-				const char* logMessage = bInstanceScan ? "Found %s Instance at 0x%p" : "Found reference to %s at 0x%p";
-				ClassDumper3::LogF(logMessage, CMeta->Name.c_str(), RealAddress);
-				Results.push_back(RealAddress);
-			}
-		}
-	}
-
-	return Results;
 }
 
 std::vector<uintptr_t> RTTI::ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CMeta)
@@ -189,6 +147,35 @@ std::vector<uintptr_t> RTTI::ScanForClassInstances(const std::shared_ptr<ClassMe
 
 void RTTI::ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstances, std::mutex& mtx)
 {
+	auto HandleCandidate = [&](uintptr_t Candidate, uintptr_t RealAddress)
+		{
+			auto it = VTableClassMap.find(Candidate);
+			if (it != VTableClassMap.end())
+			{
+				const char* logMessage = isForInstances
+					? "Found %s instance at 0x%p"
+					: "Found reference to %s at 0x%p";
+
+				ClassDumper3::LogF(logMessage, it->second->Name.c_str(), RealAddress);
+
+				std::scoped_lock Lock(mtx);
+				if (isForInstances)
+				{
+					it->second->ClassInstances.push_back(RealAddress);
+				}
+				else
+				{
+					it->second->CodeReferences.push_back(RealAddress);
+				}
+			}
+		};
+
+	ScanBlock(MemoryBlock, isForInstances, HandleCandidate);
+}
+
+
+void RTTI::ScanBlock(const FMemoryBlock& MemoryBlock, bool isForInstances, FScanCallback Callback)
+{
 	auto MemoryBlockCopy = reinterpret_cast<uintptr_t>(MemoryBlock.Copy.data());
 	auto MemoryBlockAddress = reinterpret_cast<uintptr_t>(MemoryBlock.Address);
 
@@ -207,46 +194,39 @@ void RTTI::ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstanc
 			Candidate = *reinterpret_cast<uintptr_t*>(i);
 		}
 
-		if (Candidate % sizeof(void*) != 0) continue; // Skip unaligned addresses
-
-		auto it = VTableClassMap.find(Candidate);
-		if (it != VTableClassMap.end())
+		// Unaligned, likely invalid ptr
+		if (Candidate % sizeof(void*) != 0)
 		{
-			const char* logMessage = isForInstances ? "Found %s instance at 0x%p" : "Found reference to %s at 0x%p";
-			ClassDumper3::LogF(logMessage, it->second->Name.c_str(), RealAddress);
-
-			std::scoped_lock Lock(mtx);
-			if (isForInstances)
-			{
-				it->second->ClassInstances.push_back(RealAddress);
-			}
-			else
-			{
-				it->second->CodeReferences.push_back(RealAddress);
-			}
+			continue;
 		}
+
+		Callback(Candidate, RealAddress);
 	}
 }
 
-void RTTI::ScanAllMemory(std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances)
+std::vector<uintptr_t> RTTI::ScanMemory(const std::shared_ptr<ClassMetaData>& CMeta, std::vector<std::future<FMemoryBlock>>& Blocks, bool bInstanceScan)
 {
-	std::mutex mtx;
-	ThreadPool pool(std::thread::hardware_concurrency());
+	std::vector<uintptr_t> Results;
 
 	for (auto& Block : Blocks)
 	{
-		pool.enqueue([&]() mutable
-		{
-				Block.wait();
-				FMemoryBlock MemoryBlock = Block.get();
-				if (!MemoryBlock.IsValid())
-				{
-					return;
-				}
+		Block.wait();
+		FMemoryBlock MemoryBlock = Block.get();
 
-				ProcessMemoryBlock(MemoryBlock, isForInstances, mtx);
-		});
+		ScanBlock(MemoryBlock, bInstanceScan,
+				  [&](uintptr_t Candidate, uintptr_t RealAddress)
+				  {
+					  if (Candidate == CMeta->VTable)
+					  {
+						  const char* logMessage = bInstanceScan ? "Found %s Instance at 0x%p" : "Found reference to %s at 0x%p";
+
+						  ClassDumper3::LogF(logMessage, CMeta->Name.c_str(), RealAddress);
+						  Results.push_back(RealAddress);
+					  }
+				  });
 	}
+
+	return Results;
 }
 
 void RTTI::ScanForAllCodeReferences()
@@ -268,16 +248,19 @@ void RTTI::ScanAll()
 		Class->CodeReferences.clear();
 		Class->ClassInstances.clear();
 	}
-	
+
 	ScanForAllCodeReferences();
 	ScanForAllClassInstances();
-	
+
 	bIsScanning.store(false, std::memory_order_release);
 }
 
 void RTTI::ScanAllAsync()
 {
-	if (bIsScanning.load(std::memory_order_acquire)) return;
+	if (bIsScanning.load(std::memory_order_acquire))
+	{
+		return;
+	}
 
 	bIsScanning.store(true, std::memory_order_release);
 	ScannerThread = std::thread(&RTTI::ScanAll, this);
@@ -286,7 +269,10 @@ void RTTI::ScanAllAsync()
 
 void RTTI::ScanForCodeReferencesAsync(const std::shared_ptr<ClassMetaData>& CMeta)
 {
-	if (bIsScanning.load(std::memory_order_acquire)) return;
+	if (bIsScanning.load(std::memory_order_acquire))
+	{
+		return;
+	}
 
 	bIsScanning.store(true, std::memory_order_release);
 	ScannerThread = std::thread(&RTTI::ScanForCodeReferences, this, CMeta);
@@ -295,20 +281,22 @@ void RTTI::ScanForCodeReferencesAsync(const std::shared_ptr<ClassMetaData>& CMet
 
 void RTTI::ScanForClassInstancesAsync(const std::shared_ptr<ClassMetaData>& CMeta)
 {
-	if (bIsScanning.load(std::memory_order_acquire)) return;
+	if (bIsScanning.load(std::memory_order_acquire))
+	{
+		return;
+	}
 
 	bIsScanning.store(true, std::memory_order_release);
 	ScannerThread = std::thread(&RTTI::ScanForClassInstances, this, CMeta);
 	ScannerThread.detach();
 }
 
-
 void RTTI::FindValidSections()
 {
 	SetProcessingStage("Finding valid PE sections");
 	bool bFoundExecutable = false;
 	bool bFoundReadOnly = false;
-	
+
 	// find valid executable or read only sections
 	for (auto& section : Module->Sections)
 	{
@@ -334,7 +322,7 @@ void RTTI::FindValidSections()
 }
 
 bool RTTI::IsInExecutableSection(uintptr_t Address)
-{	
+{
 	return std::any_of(ExecutableSections.begin(), ExecutableSections.end(), [&](const FModuleSection& Section) { return Section.Contains(Address); });
 }
 
@@ -347,8 +335,7 @@ void RTTI::ScanForClasses(std::vector<PotentialClass>& PotentialClasses)
 {
 	SetProcessingStage("Scanning for potential classes...");
 
-	auto Accumulator = [](size_t sum, const FModuleSection& Section)
-		{ return sum + Section.Size(); };
+	auto Accumulator = [](size_t sum, const FModuleSection& Section) { return sum + Section.Size(); };
 
 	size_t TotalSectionSize = std::accumulate(ReadOnlySections.begin(), ReadOnlySections.end(), size_t(0), Accumulator);
 
@@ -368,7 +355,7 @@ void RTTI::ScanForClasses(std::vector<PotentialClass>& PotentialClasses)
 				ClassDumper3::Log("Error: Index out of bounds in RTTI scan");
 				break;
 			}
-			
+
 			// if nullptr or we are at the end of the section
 			if (SectionBuffer[Index] == 0 || Index + 1 > SectionMax)
 			{
@@ -380,28 +367,28 @@ void RTTI::ScanForClasses(std::vector<PotentialClass>& PotentialClasses)
 			{
 				continue;
 			}
-			
+
 			PotentialClass& PClass = PotentialClasses.emplace_back();
 			PClass.CompleteObjectLocator = SectionBuffer[Index];
 			// VTables are in order in MSVC so we can just add the index to the start of the section
 			PClass.VTable = Section.Start + (Index + 1) * sizeof(uintptr_t);
-
 		}
 	}
-	
+
+	SortClasses(PotentialClasses);
+
 	ClassDumper3::LogF("Found %u potential classes in %s\n", PotentialClasses.size(), ModuleName.c_str());
 }
-
 
 void RTTI::ValidateClasses(std::vector<PotentialClass>& PotentialClasses)
 {
 	SetProcessingStage("Validating potential classes...");
-	
+
 	std::vector<PotentialClass> ValidatedClasses;
 	ValidatedClasses.reserve(PotentialClasses.size());
-	
+
 	DWORD signatureMatch = IsRunning64Bits() ? 1 : 0;
-	
+
 	for (PotentialClass& PClass : PotentialClasses)
 	{
 		RTTICompleteObjectLocator CompleteObjectLocator;
@@ -436,9 +423,9 @@ void RTTI::ValidateClasses(std::vector<PotentialClass>& PotentialClasses)
 
 		ValidatedClasses.push_back(PClass);
 	}
-	
+
 	ProcessClasses(ValidatedClasses);
-	
+
 	ClassDumper3::LogF("Found %u valid classes in %s\n", Classes.size(), ModuleName.c_str());
 }
 
@@ -482,6 +469,7 @@ void RTTI::ProcessClasses(const std::vector<PotentialClass>& FinalClasses)
 
 		if (ValidClass->Name == LastClassName && ValidClass->bMultipleInheritance)
 		{
+			// TODO Fix interface detection.
 			ValidClass->bInterface = true;
 			LastClass->Interfaces.push_back(ValidClass);
 		}
@@ -491,29 +479,17 @@ void RTTI::ProcessClasses(const std::vector<PotentialClass>& FinalClasses)
 			LastClass = ValidClass;
 		}
 
-		if (ValidClass->bInterface)
-		{
-			ValidClass->FormattedName = "interface " + ValidClass->Name;
-		}
-		else if (ValidClass->bStruct)
-		{
-			ValidClass->FormattedName = "struct " + ValidClass->Name;
-		}
-		else
-		{
-			ValidClass->FormattedName = "class " + ValidClass->Name;
-		}
-
 		EnumerateVirtualFunctions(ValidClass);
 
 		Classes.push_back(ValidClass);
 		VTableClassMap.insert(std::pair<uintptr_t, std::shared_ptr<ClassMetaData>>(ValidClass->VTable, ValidClass));
 		NameClassMap.insert(std::pair<std::string, std::shared_ptr<ClassMetaData>>(ValidClass->Name, ValidClass));
 	}
-	
+
 	ProcessParentClasses();
 }
 
+// TODO FIX Parent processing bugs
 void RTTI::ProcessParentClasses()
 {
 	// process parent classes
@@ -589,8 +565,7 @@ void RTTI::ProcessParentClasses()
 			if (CMeta->VTableOffset == ParentClassNode->where.mdisp && CMeta->bInterface)
 			{
 				std::string OriginalName = CMeta->Name;
-				CMeta->Name = ParentClassNode->Name;
-				CMeta->FormattedName = "interface " + OriginalName + " -> " + ParentClassNode->Name;
+				CMeta->Name = OriginalName + " -> " + ParentClassNode->Name;
 				CMeta->MangledName = ParentClassNode->MangledName;
 			}
 			CMeta->Parents.push_back(ParentClassNode);
@@ -598,31 +573,33 @@ void RTTI::ProcessParentClasses()
 	}
 }
 
+
+
 void RTTI::EnumerateVirtualFunctions(const std::shared_ptr<ClassMetaData>& CMeta)
 {
 	constexpr int MaximumVirtualFunctions = 0x4000;
 	static std::unique_ptr<uintptr_t[]> buffer = std::make_unique<uintptr_t[]>(MaximumVirtualFunctions);
-	
+
 	memset(buffer.get(), 0, sizeof(uintptr_t) * MaximumVirtualFunctions);
-	
+
 	CMeta->Functions.clear();
-	
+
 	Process->Read(CMeta->VTable, buffer.get(), MaximumVirtualFunctions);
-	
+
 	for (size_t i = 0; i < MaximumVirtualFunctions / sizeof(uintptr_t); i++)
 	{
 		if (buffer[i] == 0)
 		{
 			break;
 		}
-		
+
 		if (!IsInExecutableSection(buffer[i]))
 		{
 			break;
 		}
-		
+
 		CMeta->Functions.push_back(buffer[i]);
-		
+
 		std::string function_name = "sub_" + IntegerToHexStr(buffer[i]);
 		CMeta->FunctionNames.try_emplace(buffer[i], function_name);
 	}
@@ -633,9 +610,12 @@ std::string RTTI::DemangleMSVC(char* Symbol)
 	static const std::string VTABLE_SYMBOL_PREFIX = "??_7";
 	static const std::string VTABLE_SYMBOL_SUFFIX = "6B@";
 	char* pSymbol = nullptr;
-	if (*static_cast<char*>(Symbol + 4) == '?') pSymbol = Symbol + 1;
-	else if (*static_cast<char*>(Symbol) == '.') pSymbol = Symbol + 4;
-	else if (*static_cast<char*>(Symbol) == '?') pSymbol = Symbol + 2;
+	if (*static_cast<char*>(Symbol + 4) == '?')
+		pSymbol = Symbol + 1;
+	else if (*static_cast<char*>(Symbol) == '.')
+		pSymbol = Symbol + 4;
+	else if (*static_cast<char*>(Symbol) == '?')
+		pSymbol = Symbol + 2;
 	else
 	{
 		ClassDumper3::LogF("Unknown symbol format: %s", Symbol);
@@ -659,17 +639,12 @@ std::string RTTI::DemangleMSVC(char* Symbol)
 void RTTI::SortClasses(std::vector<PotentialClass>& Classes)
 {
 	SetProcessingStage("Sorting classes...");
-	std::sort(Classes.begin(), Classes.end(), [&](const PotentialClass& a, const PotentialClass& b){ return a.DemangledName < b.DemangledName; });
+	std::sort(Classes.begin(), Classes.end(), [&](const PotentialClass& a, const PotentialClass& b) { return a.DemangledName < b.DemangledName; });
 }
 
 void RTTI::FilterSymbol(std::string& Symbol)
 {
-	static std::vector<std::string> Filters =
-	{
-		"::`vftable'",
-		"const ",
-		"::`anonymous namespace'"
-	};
+	static std::vector<std::string> Filters = {"::`vftable'", "const ", "::`anonymous namespace'"};
 
 	for (auto& Filter : Filters)
 	{
@@ -681,15 +656,52 @@ void RTTI::FilterSymbol(std::string& Symbol)
 	}
 }
 
+void RTTI::ScanAllMemory(std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances)
+{
+	std::mutex mtx;
+	ThreadPool pool(std::thread::hardware_concurrency());
+
+	for (auto& Block : Blocks)
+	{
+		pool.enqueue(
+			[&]() mutable
+			{
+				Block.wait();
+				FMemoryBlock MemoryBlock = Block.get();
+				if (!MemoryBlock.IsValid())
+				{
+					return;
+				}
+
+				ProcessMemoryBlock(MemoryBlock, isForInstances, mtx);
+			});
+	}
+}
+
 void RTTI::SetProcessingStage(const std::string& Stage)
 {
 	std::scoped_lock Lock(ProcessingStageMutex);
 	ProcessingStage = Stage;
 }
 
+
 bool ClassMetaData::IsChildOf(const std::shared_ptr<ClassMetaData>& CMeta) const
 {
-	return std::any_of(Parents.begin(), Parents.end(),
-		[&](const std::shared_ptr<ParentClass>& Parent)
-		{ return Parent->Name == CMeta->Name; });
+	return std::any_of(Parents.begin(), Parents.end(), [&](const std::shared_ptr<ParentClass>& Parent) { return Parent->Name == CMeta->Name; });
 }
+
+// Force RTTI/vtable generation for all test types
+VirtualMostDerived virtualMostDerivedInstance;
+
+DiamondLeft diamondLeftInstance;
+DiamondRight diamondRightInstance;
+DiamondBottom diamondBottomInstance;
+
+Mid1 mid1Instance;
+Mid2 mid2Instance;
+Leaf leafInstance;
+
+MixedDerived mixedDerivedInstance;
+
+MultiLevel multiLevelInstance;
+MultiLevel2 multiLevel2Instance;

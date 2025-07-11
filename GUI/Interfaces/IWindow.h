@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include <vector>
 #include <memory>
+
 enum EMouseButton
 {
 	Left,
@@ -84,4 +85,3 @@ private:
 	size_t WindowID;
 	bool bEnabled = false;
 };
-

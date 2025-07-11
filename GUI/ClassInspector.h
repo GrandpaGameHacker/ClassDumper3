@@ -32,7 +32,7 @@ protected:
 	void RenameFunction(std::pair<const uintptr_t, std::string>* InFunction);
 	void CopyInfo();
 	
-	std::shared_ptr<ClassMetaData> SelectedClass;
+	std::shared_ptr<ClassMetaData> SelectedClassWeak;
 	std::shared_ptr<FTargetProcess> Target;
 	std::shared_ptr<RTTI> RTTIObserver;
 

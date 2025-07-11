@@ -37,16 +37,23 @@ void ClassInspector::InitializeBindings()
 
 void ClassInspector::Draw()
 {
-	if (!SelectedClass)
+	if (!SelectedClassWeak)
+	{
 		return;
+	}
+
+	ImVec2 screenSize = ImGui::GetIO().DisplaySize;
+	ImVec2 WindowSize(screenSize.x * 0.4, screenSize.y * 0.5f);
+
+	ImGui::SetNextWindowSize(WindowSize, ImGuiCond_FirstUseEver);
 
 	const char* WindowTitle = "Class Inspector###";
 
-	if (SelectedClass->bInterface)
+	if (SelectedClassWeak->bInterface)
 	{
 		WindowTitle = "Interface Inspector###";
 	}
-	else if (SelectedClass->bStruct)
+	else if (SelectedClassWeak->bStruct)
 	{
 		WindowTitle = "Structure Inspector###";
 	}
@@ -63,13 +70,13 @@ void ClassInspector::Draw()
 
 	if (ImGui::Button("Scan for Code References"))
 	{
-		RTTIObserver->ScanForCodeReferencesAsync(SelectedClass);
+		RTTIObserver->ScanForCodeReferencesAsync(SelectedClassWeak);
 	}
 	ImGui::SameLine();
 
 	if (ImGui::Button("Scan for Instances"))
 	{
-		RTTIObserver->ScanForClassInstancesAsync(SelectedClass);
+		RTTIObserver->ScanForClassInstancesAsync(SelectedClassWeak);
 	}
 
 	if (RTTIObserver->IsAsyncScanning())
@@ -80,33 +87,38 @@ void ClassInspector::Draw()
 	}
 
 	ImGui::Separator();
-	ImGui::Text("Name: %s", SelectedClass->Name.c_str());
+	ImGui::Text("Name: %s", SelectedClassWeak->Name.c_str());
 
-	ImGui::Text("CompleteObjectLocator: 0x%s", IntegerToHexStr(SelectedClass->CompleteObjectLocator).c_str());
+	ImGui::Text("CompleteObjectLocator: 0x%s", IntegerToHexStr(SelectedClassWeak->CompleteObjectLocator).c_str());
 
-	ImGui::Text("Num Inherited: %d", SelectedClass->Parents.size());
+	ImGui::Text("Num Inherited: %d", SelectedClassWeak->Parents.size());
 	{
-		ScopedColor Color(ImGuiCol_Text, Color::Red);
-		for (std::shared_ptr<ParentClass> Parent : SelectedClass->Parents)
+		for (const std::shared_ptr<ParentClass>& Parent : SelectedClassWeak->Parents)
 		{
-			static const std::string Indent = "\t";
-			std::string IndentText = "";
-			std::string ParentText = Parent->Name;
-			
-			for (size_t i = 1; i < Parent->TreeDepth; i++)
-			{
-				IndentText.append(Indent);
-			}
+			std::shared_ptr<ClassMetaData> ParentData = Parent->Class.lock();
+			// Optional color based on type
+			if (ParentData && ParentData->bInterface)
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 1, 1));
+			else if (ParentData && ParentData->bStruct)
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1.0f));
+			else
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1.0f));
 
-			ParentText = IndentText + ParentText;
-			ImGui::Text(ParentText.c_str());
+			// Apply indentation based on tree depth
+			ImGui::Indent(Parent->TreeDepth * 12.0f); // Adjust multiplier as needed
+
+			ImGui::TextUnformatted(Parent->Name.c_str());
+
+			ImGui::Unindent(Parent->TreeDepth * 12.0f);
+			ImGui::PopStyleColor();
 		}
 	}
 
-	ImGui::Text("Num Interfaces: %d", SelectedClass->Interfaces.size());
+
+	ImGui::Text("Num Interfaces: %d", SelectedClassWeak->Interfaces.size());
 	{
 		ScopedColor Color(ImGuiCol_Text, Color::Magenta);
-		for (std::weak_ptr<ClassMetaData> InterfaceWeak : SelectedClass->Interfaces)
+		for (const std::weak_ptr<ClassMetaData>& InterfaceWeak : SelectedClassWeak->Interfaces)
 		{
 			std::shared_ptr<ClassMetaData> Interface = InterfaceWeak.lock();
 			if (!Interface)
@@ -115,27 +127,36 @@ void ClassInspector::Draw()
 		}
 	}
 
-	ImGui::Text("Virtual Function Table: 0x%s", IntegerToHexStr(SelectedClass->VTable).c_str());
+	ImGui::Text("Virtual Function Table: 0x%s", IntegerToHexStr(SelectedClassWeak->VTable).c_str());
 
-	ImGui::Text("Num Virtual Functions: %d", SelectedClass->Functions.size());
+	ImGui::Text("Num Virtual Functions: %d", static_cast<int>(SelectedClassWeak->Functions.size()));
 	{
 		ScopedColor Color(ImGuiCol_Text, Color::Green);
 		int Index = 0;
-		for (auto& Function : SelectedClass->FunctionNames)
+
+		for (const auto& Function : SelectedClassWeak->Functions)
 		{
-			std::string FunctionText = "%d - " + IntegerToHexStr(Function.first) + " : " + Function.second;
-			ImGui::Text(FunctionText.c_str(), Index);
+			auto it = SelectedClassWeak->FunctionNames.find(Function);
+			std::string FunctionName = (it != SelectedClassWeak->FunctionNames.end()) ? it->second : "<unknown>";
+			// todo refactor function names to be global per process.
+
+			std::string FunctionText = std::to_string(Index) + " - " + IntegerToHexStr(Function) + " : " + FunctionName;
+			ImGui::Text("%s", FunctionText.c_str());
+
 			if (ImGui::IsItemClicked(EMouseButton::Left))
 			{
 				// insert disassembler tool here
 			}
-			if (ImGui::IsItemClicked(EMouseButton::Right))
+			if (ImGui::IsItemClicked(EMouseButton::Right) && it != SelectedClassWeak->FunctionNames.end())
 			{
-				RenameFunction(&Function);
+				RenameFunction(&(*it)); 
 			}
+
 			Index++;
 		}
+
 	}
+
 	ImGui::NextColumn();
 	DrawClassReferences();
 
@@ -145,13 +166,13 @@ void ClassInspector::Draw()
 
 void ClassInspector::DrawClassReferences()
 {
-	if (!SelectedClass) return;
+	if (!SelectedClassWeak) return;
 	
 	ImGui::Text("Code References:");
 	ImGui::BeginChildFrame(2, {300,300});
 	if (!RTTIObserver->IsAsyncScanning())
 	{
-		for (const auto& CodeReference : SelectedClass->CodeReferences)
+		for (const auto& CodeReference : SelectedClassWeak->CodeReferences)
 		{
 			std::string CodeRefString = "0x" + IntegerToHexStr(CodeReference);
 
@@ -172,7 +193,7 @@ void ClassInspector::DrawClassReferences()
 	ImGui::BeginChildFrame(3, { 300,300 }, ImGuiWindowFlags_NoCollapse);
 	if (!RTTIObserver->IsAsyncScanning())
 	{
-		for (const auto& Instance : SelectedClass->ClassInstances)
+		for (const auto& Instance : SelectedClassWeak->ClassInstances)
 		{
 			std::string InstanceStr = "0x" + IntegerToHexStr(Instance);
 
@@ -195,7 +216,7 @@ void ClassInspector::OnProcessSelectedDelegate(std::shared_ptr<FTargetProcess> I
 
 void ClassInspector::OnClassSelectedDelegate(std::shared_ptr<ClassMetaData> InClass)
 {
-	SelectedClass = InClass;
+	SelectedClassWeak = InClass;
 	Enable();
 }
 
@@ -214,20 +235,20 @@ void ClassInspector::RenameFunction(std::pair<const uintptr_t, std::string>* InF
 void ClassInspector::CopyInfo()
 {
     // Copy all class info
-    std::string Info = "Name: " + SelectedClass->Name + "\n";
-	Info += "CompleteObjectLocator: 0x" + IntegerToHexStr(SelectedClass->CompleteObjectLocator) + "\n";
-	Info += "Num Inherited: " + std::to_string(SelectedClass->Parents.size()) + "\n";
+    std::string Info = "Name: " + SelectedClassWeak->Name + "\n";
+	Info += "CompleteObjectLocator: 0x" + IntegerToHexStr(SelectedClassWeak->CompleteObjectLocator) + "\n";
+	Info += "Num Inherited: " + std::to_string(SelectedClassWeak->Parents.size()) + "\n";
 
-    for (std::shared_ptr<ParentClass> parent : SelectedClass->Parents)
+    for (const std::shared_ptr<ParentClass>& Parent : SelectedClassWeak->Parents)
     {
-		Info += parent->Name + "\n";
+		Info += Parent->Name + "\n";
     }
 
-	Info += "Num Interfaces: " + std::to_string(SelectedClass->Interfaces.size()) + "\n";
-	Info += "Virtual Function Table: 0x" + IntegerToHexStr(SelectedClass->VTable) + "\n";
-	Info += "Num Virtual Functions: " + std::to_string(SelectedClass->Functions.size()) + "\n";
+	Info += "Num Interfaces: " + std::to_string(SelectedClassWeak->Interfaces.size()) + "\n";
+	Info += "Virtual Function Table: 0x" + IntegerToHexStr(SelectedClassWeak->VTable) + "\n";
+	Info += "Num Virtual Functions: " + std::to_string(SelectedClassWeak->Functions.size()) + "\n";
 
-    for (const auto& FunctionName : SelectedClass->FunctionNames)
+    for (const auto& FunctionName : SelectedClassWeak->FunctionNames)
     {
 		Info += IntegerToHexStr(FunctionName.first) + " : " + FunctionName.second + "\n";
     }

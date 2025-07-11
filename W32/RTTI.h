@@ -95,7 +95,6 @@ struct ClassMetaData
 
 	std::string Name;
 	std::string MangledName;
-	std::string FormattedName;
 
 	DWORD VTableOffset = 0;
 	DWORD ConstructorDisplacementOffset = 0;
@@ -188,7 +187,10 @@ protected:
 	
 	void ScanAllMemory(std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances);
 	void ProcessMemoryBlock(const FMemoryBlock& MemoryBlock, bool isForInstances, std::mutex& mtx);
-	
+
+	using FScanCallback = std::function<void(uintptr_t Candidate, uintptr_t RealAddress)>;
+
+	void ScanBlock(const FMemoryBlock& MemoryBlock, bool isForInstances, FScanCallback Callback);
 	std::vector<uintptr_t> ScanMemory(const std::shared_ptr<ClassMetaData>& CMeta, std::vector<std::future<FMemoryBlock>>& Blocks, bool isForInstances);
 
 	std::vector<uintptr_t> ScanForCodeReferences(const std::shared_ptr<ClassMetaData>& CMeta);
@@ -230,8 +232,117 @@ protected:
 	/************************************************************************/
 	/*	Class Meta Data (Processed from RTTI and Memory Scans)
 	/************************************************************************/
-	
 	std::vector<std::shared_ptr<ClassMetaData>> Classes;
 	std::unordered_map<uintptr_t, std::shared_ptr<ClassMetaData>> VTableClassMap;
 	std::unordered_map<std::string, std::shared_ptr<ClassMetaData>> NameClassMap;
+};
+
+// Virtual Test Suite
+class VirtualBase
+{
+public:
+	virtual void vbase0() = 0;
+};
+
+class VirtualDerived1 : virtual public VirtualBase
+{
+public:
+	virtual void vd1() {};
+};
+
+class VirtualDerived2 : virtual public VirtualBase
+{
+public:
+	virtual void vd2() {};
+};
+
+class VirtualMostDerived : public VirtualDerived1, public VirtualDerived2
+{
+public:
+	void vbase0() override {};
+};
+
+class DiamondTop
+{
+public:
+	virtual void top() {};
+};
+
+class DiamondLeft : virtual public DiamondTop
+{
+public:
+	virtual void left() {};
+};
+
+class DiamondRight : virtual public DiamondTop
+{
+public:
+	virtual void right() {};
+};
+
+class DiamondBottom : public DiamondLeft, public DiamondRight
+{
+public:
+	virtual void bottom() {};
+};
+
+
+class Root
+{
+public:
+	virtual void r() {};
+};
+
+class Mid1 : public Root
+{
+public:
+	virtual void m1() {};
+};
+
+class Mid2 : public Root
+{
+public:
+	virtual void m2() {};
+};
+
+class Leaf : public Mid1, public Mid2
+{
+public:
+	virtual void l() {};
+};
+
+
+
+class MixedBase
+{
+public:
+	virtual void m0() = 0;
+	void helper() {} // Not virtual
+};
+
+class MixedDerived : public MixedBase
+{
+public:
+	void m0() override {};
+	void extra() {} // Also not virtual
+};
+
+class IAlpha { virtual void a1() = 0; };
+class IBeta { virtual void b1() = 0; virtual void b2() = 0; };
+class IGamma { virtual void g1() = 0; virtual void g2() = 0; virtual void g3() = 0; };
+
+class MultiLevel : public IAlpha, public IBeta
+{
+public:
+	virtual void a1() override {};
+	virtual void b1() override {};
+	virtual void b2() override {};
+};
+
+class MultiLevel2 : public MultiLevel, public IGamma
+{
+public:
+	virtual void g1() override {};
+	virtual void g2() override {};
+	virtual void g3() override {};
 };

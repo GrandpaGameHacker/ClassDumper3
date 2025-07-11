@@ -9,7 +9,7 @@ class MainWindow : public IWindow
 {
 public:
 	MainWindow();
-	~MainWindow();
+	~MainWindow() = default;
 	void Draw() override;
 	
 	MulticastDelegate<std::shared_ptr<ClassMetaData>> OnClassSelected;
@@ -33,7 +33,7 @@ protected:
 	std::vector<FProcessListItem> ProcessList;
 	std::shared_ptr<FTargetProcess> Target;
 	std::shared_ptr<RTTI> RTTIObserver;
-	std::weak_ptr<ClassMetaData> SelectedClass;
+	std::weak_ptr<ClassMetaData> SelectedClassWeak;
 
 	std::string Title = "ClassDumper3";
 };
